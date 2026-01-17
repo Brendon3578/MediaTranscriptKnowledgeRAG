@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: media_pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: media
+      POSTGRES_PASSWORD: media
+      POSTGRES_DB: media_rag
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/setup.sql:/docker-entrypoint-initdb.d/setup.sql:rw
+    #healthcheck:
+    #  test: ["CMD-SHELL", "pg_isready -U media"]
+    #  interval: 10s
+    #  timeout: 5s
+    #  retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: media_rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    #healthcheck:
+    #  test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+    #  interval: 30s
+    #  timeout: 30s
+    #  retries: 3
+
+
+volumes:
+  postgres_data:
