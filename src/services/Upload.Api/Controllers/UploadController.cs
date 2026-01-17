@@ -5,6 +5,7 @@ using Upload.Api.Infrastructure.Entities;
 using Upload.Api.Infrastructure.Enum;
 using Upload.Api.Infrastructure.FileStorage;
 using Upload.Api.Messaging;
+using Upload.Api.Services;
 
 namespace Upload.Api.Controllers
 {
@@ -12,10 +13,8 @@ namespace Upload.Api.Controllers
     [Route("api/[controller]")]
     public class UploadController : ControllerBase
     {
-        private readonly IFileStorage _fileStorage;
-        private readonly UploadDbContext _context;
-        private readonly IMessagePublisher _publisher;
         private readonly ILogger<UploadController> _logger;
+        private readonly IUploadService _uploadService;
 
         private const int MaxRequestSizeLimitInBytes = 500_000_000; // 500 MB
 
@@ -27,15 +26,11 @@ namespace Upload.Api.Controllers
         };
 
         public UploadController(
-            IFileStorage fileStorage,
-            UploadDbContext context,
-            IMessagePublisher publisher,
+            IUploadService uploadService,
             ILogger<UploadController> logger
         )
         {
-            _fileStorage = fileStorage;
-            _context = context;
-            _publisher = publisher;
+            _uploadService = uploadService;
             _logger = logger;
         }
 
@@ -51,65 +46,13 @@ namespace Upload.Api.Controllers
                 if (!AllowedContentTypes.Contains(file.ContentType))
                     return BadRequest(new ErrorResponseRequest($"Tipo de arquivo não suportado: {file.ContentType}"));
 
-                _logger.LogInformation(
-                    "Iniciando upload de {FileName} ({Size} bytes)",
-                    file.FileName,
-                    file.Length
-                );
-
-                // Salva o arquivo localmente / em bucket s3
-                string filePath;
-
-                using (var stream = file.OpenReadStream())
-                {
-                    filePath = await _fileStorage.SaveFileAsync(stream, file.FileName,
-                        file.ContentType, ct);
-                }
-
-                // Entidade no banco
-
-                var media = new Media
-                {
-                    Id = Guid.NewGuid(),
-                    FileName = file.FileName,
-                    FilePath = filePath,
-                    ContentType = file.ContentType,
-                    FileSizeBytes = file.Length,
-                    Status = MediaStatus.Uploaded,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                _context.Media.Add(media);
-                await _context.SaveChangesAsync(ct);
-
-
-                _logger.LogInformation("Media {MediaId} salva no banco", media.Id);
-
-                // Publica evento
-                var uploadedEvent = new MediaUploadedEvent
-                {
-                    MediaId = media.Id,
-                    FilePath = media.FilePath,
-                    ContentType = media.ContentType,
-                    FileName = media.FileName,
-                    FileSizeBytes = media.FileSizeBytes,
-                    UploadedAt = media.CreatedAt
-                };
-
-
-                await _publisher.PublishAsync(uploadedEvent, ct);
+                var uploadMediaDto = await _uploadService.UploadFileAsync(file, ct);
 
                 // Retorna 202 Accepted
                 return AcceptedAtAction(
                     nameof(GetStatus),
-                    new { id = media.Id },
-                    new
-                    {
-                        mediaId = media.Id,
-                        fileName = media.FileName,
-                        status = media.Status.ToString(),
-                        uploadedAt = media.CreatedAt
-                    }
+                    new { id = uploadMediaDto.MediaId },
+                    uploadMediaDto
                 );
 
             }
@@ -123,19 +66,12 @@ namespace Upload.Api.Controllers
         [HttpGet("{id}/status")]
         public async Task<IActionResult> GetStatus(Guid id, CancellationToken ct)
         {
-            var media = await _context.Media.FindAsync(new object[] { id }, ct);
+            var uploadMediaDto = await _uploadService.GetStatus(id, ct);
 
-            if (media == null)
+            if (uploadMediaDto == null)
                 return NotFound(new { error = "Media não encontrada" });
 
-            return Ok(new
-            {
-                mediaId = media.Id,
-                fileName = media.FileName,
-                status = media.Status.ToString(),
-                uploadedAt = media.CreatedAt,
-                updatedAt = media.UpdatedAt
-            });
+            return Ok(uploadMediaDto);
         }
     }
 

@@ -1,9 +1,9 @@
 version: "3.9"
 
 services:
-  pgvector:
+  postgres_pgvector:
     image: pgvector/pgvector:pg16
-    container_name: media_pgvector
+    container_name: media_rag_pgvector
     restart: unless-stopped
     environment:
       POSTGRES_USER: media
@@ -22,11 +22,13 @@ services:
 
   rabbitmq:
     image: rabbitmq:3-management
-    container_name: media_rabbitmq
+    container_name: media_rag_rabbitmq
     restart: unless-stopped
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672"   # AMQP
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -39,3 +41,4 @@ services:
 
 volumes:
   postgres_data:
+  rabbitmq_data:
