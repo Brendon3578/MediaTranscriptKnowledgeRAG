@@ -1,4 +1,4 @@
-using Transcription.Worker;
+using MediaTranscription.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddHostedService<Worker>();

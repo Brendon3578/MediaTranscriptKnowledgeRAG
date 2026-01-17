@@ -1,4 +1,4 @@
-namespace Embedding.Worker;
+namespace MediaEmbedding.Worker;
 
 public class Worker(ILogger<Worker> logger) : BackgroundService
 {

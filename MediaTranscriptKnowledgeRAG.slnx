@@ -1,9 +1,13 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yml" />
+    <File Path="PRD.md" />
+  </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/services/">
-    <Project Path="src/services/Embedding.Worker/Embedding.Worker.csproj" />
+    <Project Path="src/services/Embedding.Worker/MediaEmbedding.Worker.csproj" />
     <Project Path="src/services/Query.Api/Query.Api.csproj" />
-    <Project Path="src/services/Transcription.Worker/Transcription.Worker.csproj" />
+    <Project Path="src/services/Transcription.Worker/MediaTranscription.Worker.csproj" />
     <Project Path="src/services/Upload.Api/Upload.Api.csproj" />
   </Folder>
   <Folder Name="/src/shared/">

@@ -1,4 +1,4 @@
-using Embedding.Worker;
+using MediaEmbedding.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Services.AddHostedService<Worker>();

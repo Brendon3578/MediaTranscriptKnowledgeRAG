@@ -1,4 +1,4 @@
-namespace Transcription.Worker;
+namespace MediaTranscription.Worker;
 
 public class Worker(ILogger<Worker> logger) : BackgroundService
 {

@@ -1,41 +1,65 @@
+using Microsoft.EntityFrameworkCore;
+using Upload.Api.Infrastructure;
+using Upload.Api.Infrastructure.FileStorage;
+using Upload.Api.Messaging;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+
+
+
+// Configurações
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+// Database
+builder.Services.AddDbContext<UploadDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+// File Storage
+builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+
+// Messaging
+builder.Services.AddSingleton<IMessagePublisher, InMemoryMessagePublisher>();
+
+// CORS (se necessário) -> TODO: Mudar em uso em produção
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Migrations automáticas (apenas dev)
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<UploadDbContext>();
+    await db.Database.MigrateAsync();
 }
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseCors("AllowAll");
+app.UseAuthorization();
+app.MapControllers();
+
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
