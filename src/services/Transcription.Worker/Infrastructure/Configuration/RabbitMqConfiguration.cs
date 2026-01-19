@@ -9,6 +9,8 @@
         public string ExchangeName { get; set; } = string.Empty;
         public string ExchangeType { get; set; } = string.Empty;
         public string RoutingKey { get; set; } = string.Empty;
+        public string QueueName { get; set; } = string.Empty;
+
 
         public void Validate()
         {
@@ -26,6 +28,8 @@
                 throw new ArgumentException("RabbitMQ ExchangeType is not configured.");
             if (string.IsNullOrWhiteSpace(RoutingKey))
                 throw new ArgumentException("RabbitMQ RoutingKey is not configured.");
+            if (string.IsNullOrWhiteSpace(QueueName))
+                throw new ArgumentException("RabbitMQ QueueName is not configured.");
         }
     }
 }

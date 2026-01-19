@@ -1,4 +1,4 @@
-﻿namespace Upload.Api.Messaging
+﻿namespace Shared.Contracts.Events
 {
     public record MediaUploadedEvent
     {
