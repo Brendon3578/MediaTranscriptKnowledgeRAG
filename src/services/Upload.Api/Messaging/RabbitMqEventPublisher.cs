@@ -1,5 +1,6 @@
 ﻿
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using System.Text;
 using System.Text.Json;
@@ -10,7 +11,7 @@ namespace Upload.Api.Messaging
 {
     public class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
     {
-        private readonly RabbitMqConfiguration _config;
+        private readonly RabbitMqOptions _options;
         private readonly ILogger<RabbitMqEventPublisher> _logger;
         private IChannel? _channel; // antes era IModel
         private IConnection? _connection;
@@ -21,9 +22,9 @@ namespace Upload.Api.Messaging
         };
 
 
-        public RabbitMqEventPublisher(RabbitMqConfiguration config, ILogger<RabbitMqEventPublisher> logger)
+        public RabbitMqEventPublisher(IOptions<RabbitMqOptions> options, ILogger<RabbitMqEventPublisher> logger)
         {
-            _config = config;
+            _options = options.Value;
             _logger = logger;
         }
 
@@ -32,18 +33,18 @@ namespace Upload.Api.Messaging
         {
             var factory = new ConnectionFactory
             {
-                HostName = _config.HostName,
-                Port = _config.Port,
-                UserName = _config.UserName,
-                Password = _config.Password,
+                HostName = _options.HostName,
+                Port = _options.Port,
+                UserName = _options.UserName,
+                Password = _options.Password,
             };
 
             _connection = await factory.CreateConnectionAsync(ct);
             _channel = await _connection.CreateChannelAsync(null, ct);
 
             await _channel.ExchangeDeclareAsync(
-                exchange: _config.ExchangeName,
-                type: _config.ExchangeType, // topic
+                exchange: _options.ExchangeName,
+                type: _options.ExchangeType, // topic
                 durable: true,
                 autoDelete: false,
                 cancellationToken: ct
@@ -51,8 +52,8 @@ namespace Upload.Api.Messaging
 
             _logger.LogInformation(
                 "RabbitMQ conectado - Exchange: {Exchange}, Host: {Host}",
-                _config.ExchangeName,
-                _config.HostName
+                _options.ExchangeName,
+                _options.HostName
             );
         }
 
@@ -76,7 +77,7 @@ namespace Upload.Api.Messaging
                 };
 
                 await _channel.BasicPublishAsync(
-                    exchange: _config.ExchangeName,
+                    exchange: _options.ExchangeName,
                     routingKey: routingKey,
                     body: rawBody,
                     cancellationToken: ct,

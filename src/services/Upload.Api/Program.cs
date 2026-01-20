@@ -25,14 +25,13 @@ builder.Services.AddDbContext<UploadDbContext>(options =>
 // File Storage
 builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
 
+
 // Messaging - RabbitMQ
-var rabbitMqConfig = builder.Configuration
-    .GetSection("RabbitMq")
-    .Get<RabbitMqConfiguration>() ?? new RabbitMqConfiguration();
+builder.Services.AddOptions<RabbitMqOptions>()
+    .Bind(builder.Configuration.GetSection("RabbitMq")) // Bind the "RabbitMq" section
+    .ValidateDataAnnotations() // Enable validation using data annotations
+    .ValidateOnStart();       // Enforce validation at application startup
 
-rabbitMqConfig.Validate();
-
-builder.Services.AddSingleton(rabbitMqConfig);
 
 
 builder.Services.AddSingleton<RabbitMqEventPublisher>();

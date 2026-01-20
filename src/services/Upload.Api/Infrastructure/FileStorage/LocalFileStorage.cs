@@ -31,9 +31,12 @@ namespace Upload.Api.Infrastructure.FileStorage
                 using var fileStreamOutput = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write);
                 await fileStream.CopyToAsync(fileStreamOutput, ct);
 
-                _logger.LogInformation("Arquivo salvo: {fullPath}", fullPath);
+                // pegar filepath completo
+                var completePath = Path.GetFullPath(fullPath);
 
-                return fullPath;
+                _logger.LogInformation("Arquivo salvo: {completePath}", completePath);
+
+                return completePath;
             }
             catch (Exception ex)
             {

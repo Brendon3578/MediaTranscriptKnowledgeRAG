@@ -1,4 +1,5 @@
-﻿using Shared.Contracts.Events;
+﻿using Microsoft.Extensions.Options;
+using Shared.Contracts.Events;
 using Upload.Api.Controllers;
 using Upload.Api.Infrastructure;
 using Upload.Api.Infrastructure.Configuration;
@@ -16,21 +17,21 @@ namespace Upload.Api.Services
         private readonly UploadDbContext _context;
         private readonly IEventPublisher _eventPublisher;
         private readonly ILogger<LocalUploadService> _logger;
-        private readonly RabbitMqConfiguration _rabbitMqConfiguration;
+        private readonly RabbitMqOptions _rabbitMqOptions;
 
         public LocalUploadService(
             IFileStorage fileStorage,
             UploadDbContext context,
             IEventPublisher eventPublisher,
             ILogger<LocalUploadService> logger,
-            RabbitMqConfiguration rabbitMqConfiguration
+            IOptions<RabbitMqOptions> rabbitMqOptions
         )
         {
             _fileStorage = fileStorage;
             _context = context;
             _eventPublisher = eventPublisher;
             _logger = logger;
-            _rabbitMqConfiguration = rabbitMqConfiguration;
+            _rabbitMqOptions = rabbitMqOptions.Value;
         }
 
 
@@ -84,7 +85,7 @@ namespace Upload.Api.Services
 
 
             await _eventPublisher.PublishAsync(uploadedEvent,
-                routingKey: _rabbitMqConfiguration.RoutingKey,
+                routingKey: _rabbitMqOptions.RoutingKey,
                 ct
             );
 
