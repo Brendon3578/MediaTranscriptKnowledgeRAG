@@ -1,7 +1,10 @@
 
+using FFMpegCore;
 using MediaTranscription.Worker.Facade;
+using MediaTranscription.Worker.Infrastructure;
 using MediaTranscription.Worker.Infrastructure.Configuration;
 using MediaTranscription.Worker.Infrastructure.Entities;
+using MediaTranscription.Worker.Infrastructure.Services;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -22,15 +25,28 @@ public class TranscriptionWorker : BackgroundService
     private IChannel? _channel;
     private string? _consumerTag;
 
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    private readonly JsonSerializerOptions _jsonSerializerOptions = new()
+    {
+        WriteIndented = false
+    };
+
+
     public TranscriptionWorker(
         IOptions<RabbitMqOptions> rabbitMqOptions, 
         ILogger<TranscriptionWorker> logger,
-        ITranscriptionFacade transcriptionFacade)
+        ITranscriptionFacade transcriptionFacade,
+        IServiceScopeFactory scopeFactory
+        )
     {
         _rabbitMqOptions = rabbitMqOptions.Value;
         _logger = logger;
         _transcriptionFacade = transcriptionFacade;
+        _scopeFactory = scopeFactory;
     }
+
+
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -82,7 +98,7 @@ public class TranscriptionWorker : BackgroundService
             {
                 _logger.LogError(ex, "Erro ao processar mensagem");
 
-                // Aqui voc� pode decidir:
+                // Aqui é possível pode decidir:
                 // - BasicNack para reprocessar
                 // - BasicAck para descartar
                 // - Enviar para DLQ (Dead Letter Queue)
@@ -111,7 +127,7 @@ public class TranscriptionWorker : BackgroundService
     }
 
 
-    private async Task ProcessMediaAsync(MediaUploadedEvent mediaEvent, CancellationToken cancellationToken)
+    private async Task ProcessMediaAsync(MediaUploadedEvent mediaEvent, CancellationToken ct)
     {
         _logger.LogInformation(
             "Processando media: {MediaId}, Arquivo: {FileName}, Tamanho: {Size} bytes",
@@ -119,70 +135,84 @@ public class TranscriptionWorker : BackgroundService
             mediaEvent.FileName,
             mediaEvent.FileSizeBytes);
 
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var transcriptionDataService = scope.ServiceProvider.GetRequiredService<TranscriptionDataService>();
+
         try
         {
             var startTime = DateTime.UtcNow;
 
             // 1. Transcrever usando o Facade
-            var text = await _transcriptionFacade.TranscribeAsync(mediaEvent.FilePath, mediaEvent.ContentType);
+            var result = await _transcriptionFacade.TranscribeAsync(mediaEvent.FilePath, mediaEvent.ContentType, ct);
             
             var duration = DateTime.UtcNow - startTime;
-            // Contagem simples de palavras
-            var wordCount = string.IsNullOrWhiteSpace(text) 
-                ? 0 
-                : text.Split(new[] { ' ', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
-
-            _logger.LogInformation("Transcrição concluída para MediaId: {MediaId}. Palavras: {WordCount}", mediaEvent.MediaId, wordCount);
-
-            /*var transcriptionData = new Transcription
-            {
-                
-            }*/
+            _logger.LogInformation("Transcrição concluída para MediaId: {MediaId}. Segmentos: {Count}", mediaEvent.MediaId, result.Segments.Count);
 
 
+            // Idempotência: remove segmentos existentes dessa mídia
+            await transcriptionDataService.RemoveExistingTranscriptionSegmentsByMediaId(mediaEvent.MediaId, ct);
+
+            var transcriptionId = await transcriptionDataService.SaveTranscriptionAndSegments(result, mediaEvent, ct);
+            
             // 2. Publicar evento de conclusão
             var transcribedEvent = new MediaTranscribedEvent
             {
                 MediaId = mediaEvent.MediaId,
-                TranscriptionId = Guid.NewGuid(),
-                TranscriptionText = text,
-                WordCount = wordCount,
+                TranscriptionId = transcriptionId,
+                TotalSegments = result.Segments.Count,
+                Language = result.Language,
                 ProcessingDuration = duration,
                 TranscribedAt = DateTime.UtcNow
             };
 
-            var json = JsonSerializer.Serialize(transcribedEvent);
-            var body = Encoding.UTF8.GetBytes(json);
-            
-            var props = new BasicProperties
-            {
-                ContentType = "application/json",
-                MessageId = transcribedEvent.TranscriptionId.ToString(),
-                CorrelationId = mediaEvent.MediaId.ToString()
-            };
-
-            if (_channel is not null)
-            {
-                await _channel.BasicPublishAsync(
-                    exchange: _rabbitMqOptions.ExchangeName,
-                    routingKey: _rabbitMqOptions.PublishRoutingKey,
-                    mandatory: false,
-                    basicProperties: props,
-                    body: body,
-                    cancellationToken: cancellationToken
-                );
-
-                _logger.LogInformation("Evento MediaTranscribed publicado para MediaId: {MediaId}", mediaEvent.MediaId);
-            }
-            else
-            {
-                _logger.LogError("Canal RabbitMQ nulo. Não foi possível publicar o evento.");
-            }
+            await PublishMediaTranscribedEventAsync(transcribedEvent, _rabbitMqOptions.PublishRoutingKey, ct);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro no fluxo de transcrição da MediaId: {MediaId}", mediaEvent.MediaId);
             throw; // Repassa erro para lógica de retry (Nack)
+        }
+    }
+
+    public async Task PublishMediaTranscribedEventAsync(MediaTranscribedEvent @event, string routingKey, CancellationToken ct = default)
+    {
+        if (_channel == null)
+            throw new InvalidOperationException("RabbitMQ channel is not initialized. Call ConnectAsync first.");
+
+        try
+        {
+            var json = JsonSerializer.Serialize(@event, _jsonSerializerOptions);
+
+            var rawBody = Encoding.UTF8.GetBytes(json);
+
+            var properties = new BasicProperties()
+            {
+                ContentType = "application/json",
+                MessageId= @event.TranscriptionId.ToString(),
+                CorrelationId = @event.MediaId.ToString(),
+                Persistent = true,
+                Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
+                Type = typeof(MediaTranscribedEvent).Name
+            };
+
+            await _channel.BasicPublishAsync(
+                exchange: _rabbitMqOptions.ExchangeName,
+                routingKey: routingKey,
+                body: rawBody,
+                cancellationToken: ct,
+                mandatory: false, // TODO: validar isso depois
+                basicProperties: properties
+            );
+            _logger.LogInformation("Evento MediaTranscribed publicado para MediaId: {MediaId}", @event.MediaId);
+
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Erro ao publicar evento - Type: {EventType}, RoutingKey: {RoutingKey}",
+                typeof(MediaTranscribedEvent).Name, routingKey
+            );
+            throw;
         }
     }
 

@@ -12,28 +12,28 @@ namespace Upload.Api.Infrastructure
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<Media>(entity =>
+            modelBuilder.Entity<Media>(e =>
             {
-                entity.ToTable("media");
-                entity.HasKey(e => e.Id);
+                e.ToTable("media");
+                e.HasKey(e => e.Id);
 
-                entity.Property(e => e.FileName)
+                e.Property(e => e.FileName)
                     .IsRequired()
                     .HasMaxLength(500);
 
-                entity.Property(e => e.FilePath)
+                e.Property(e => e.FilePath)
                     .IsRequired()
                     .HasMaxLength(1000);
 
-                entity.Property(e => e.ContentType)
+                e.Property(e => e.ContentType)
                     .IsRequired()
                     .HasMaxLength(100);
 
-                entity.Property(e => e.Status)
+                e.Property(e => e.Status)
                     .HasConversion<int>();
 
-                entity.HasIndex(e => e.CreatedAt);
-                entity.HasIndex(e => e.Status);
+                e.HasIndex(e => e.CreatedAt);
+                e.HasIndex(e => e.Status);
             });
         }
     }

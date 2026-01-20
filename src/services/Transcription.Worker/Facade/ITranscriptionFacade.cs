@@ -1,7 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
 namespace MediaTranscription.Worker.Facade
 {
     /// <summary>
@@ -10,12 +6,19 @@ namespace MediaTranscription.Worker.Facade
     /// </summary>
     public interface ITranscriptionFacade
     {
-        /// <summary>
-        /// Transcreve um arquivo de áudio ou vídeo.
-        /// </summary>
-        /// <param name="filePath">Caminho completo do arquivo</param>
-        /// <param name="contentType">MIME type do arquivo (audio/* ou video/*)</param>
-        /// <returns>Texto transcrito</returns>
-        Task<string> TranscribeAsync(string filePath, string contentType);
+        Task<TranscriptionResultDto> TranscribeAsync(string filePath, string contentType, CancellationToken cancellationToken);
     }
+
+    public record TranscriptionSegmentDto(
+        int SegmentIndex,
+        string Text,
+        double StartSeconds,
+        double EndSeconds
+    );
+
+    public record TranscriptionResultDto(
+        string TranscriptionText,
+        IReadOnlyList<TranscriptionSegmentDto> Segments,
+        string Language
+    );
 }

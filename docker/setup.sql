@@ -33,6 +33,35 @@ CREATE TABLE transcriptions (
 );
 
 -- =========================
+-- tabela transcription_segments
+-- =========================
+CREATE TABLE transcription_segments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    transcription_id UUID NOT NULL,
+    media_id UUID NOT NULL,
+    segment_index INT NOT NULL,
+    text TEXT NOT NULL,
+    start_seconds REAL NOT NULL,
+    end_seconds REAL NOT NULL,
+    confidence REAL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT fk_segment_transcription
+        FOREIGN KEY (transcription_id)
+        REFERENCES transcriptions(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_segment_media
+        FOREIGN KEY (media_id)
+        REFERENCES media(id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX idx_segments_media_id ON transcription_segments(media_id);
+CREATE INDEX idx_segments_transcription_id ON transcription_segments(transcription_id);
+CREATE INDEX idx_segments_media_index ON transcription_segments(media_id, segment_index);
+
+-- =========================
 -- tabela embeddings
 -- =========================
 CREATE TABLE embeddings (
@@ -55,7 +84,7 @@ CREATE TABLE embeddings (
 );
 
 -- =========================
--- índice vetorial (RAG)
+-- ï¿½ndice vetorial (RAG)
 -- =========================
 CREATE INDEX embeddings_embedding_idx
 ON embeddings

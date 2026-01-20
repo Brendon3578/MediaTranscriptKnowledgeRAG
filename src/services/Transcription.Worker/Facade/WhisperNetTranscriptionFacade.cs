@@ -27,18 +27,18 @@ namespace MediaTranscription.Worker.Facade
             _modelProvider = modelProvider;
         }
 
-        public async Task<string> TranscribeAsync(string filePath, string contentType)
+        public async Task<TranscriptionResultDto> TranscribeAsync(string filePath, string contentType, CancellationToken cancellationToken)
         {
             _logger.LogInformation("Iniciando fluxo de transcrição para {FilePath}", filePath);
 
             // Garante que o modelo existe (baixa se necessário) na primeira execução ou recupera do cache
             if (string.IsNullOrEmpty(_cachedModelPath))
             {
-                _cachedModelPath = await _modelProvider.EnsureModelAsync(CancellationToken.None);
+                _cachedModelPath = await _modelProvider.EnsureModelAsync(cancellationToken);
             }
 
             // 1. Extração/Conversão de áudio para formato compatível (WAV 16kHz mono)
-            var audioPath = await _audioExtractor.ExtractAudioAsync(filePath, CancellationToken.None);
+            var audioPath = await _audioExtractor.ExtractAudioAsync(filePath, cancellationToken);
 
             try
             {
@@ -55,20 +55,31 @@ namespace MediaTranscription.Worker.Facade
                 _logger.LogInformation("Processando áudio...");
 
                 using var fileStream = File.OpenRead(audioPath);
+                var segments = new List<TranscriptionSegmentDto>();
+                var index = 0;
+                var language = _options.Language ?? "auto";
+
+                // final text transcript
                 var sb = new StringBuilder();
-
-                var languageList = new HashSet<string>();
-
-                await foreach (var segment in processor.ProcessAsync(fileStream))
+                
+                await foreach (var segment in processor.ProcessAsync(fileStream, cancellationToken))
                 {
+                    segments.Add(new TranscriptionSegmentDto(
+                        SegmentIndex: index++,
+                        Text: segment.Text,
+                        StartSeconds: segment.Start.TotalSeconds, // validar se realmente é um valor double
+                        EndSeconds: segment.End.TotalSeconds
+                    ));
+
                     sb.Append(segment.Text);
-                    languageList.Add(segment.Language);
+
+                    language = string.IsNullOrWhiteSpace(segment.Language) ? language : segment.Language;
                 }
 
                 var transcription = sb.ToString().Trim();
-                _logger.LogInformation("Transcrição concluída. Tamanho do texto: {Length}", transcription.Length);
 
-                return transcription;
+                _logger.LogInformation("Transcrição concluída. Segmentos: {Count}", segments.Count);
+                return new TranscriptionResultDto(transcription, segments, language);
             }
             catch (Exception ex)
             {

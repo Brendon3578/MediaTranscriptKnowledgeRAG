@@ -4,12 +4,12 @@ using System.Text;
 
 namespace Shared.Contracts.Events
 {
-    public class MediaTranscribedEvent
+    public record MediaTranscribedEvent
     {
         public Guid MediaId { get; init; }
         public Guid TranscriptionId { get; init; }
-        public string TranscriptionText { get; init; } = string.Empty;
-        public int WordCount { get; init; }
+        public int TotalSegments { get; init; }
+        public string Language { get; init; } = string.Empty;
         public TimeSpan ProcessingDuration { get; init; }
         public DateTime TranscribedAt { get; init; }
     }

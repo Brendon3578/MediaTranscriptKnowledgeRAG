@@ -2,6 +2,8 @@ using MediaTranscription.Worker;
 using MediaTranscription.Worker.Facade;
 using MediaTranscription.Worker.Infrastructure.Configuration;
 using MediaTranscription.Worker.Infrastructure.Services;
+using MediaTranscription.Worker.Infrastructure;
+using Microsoft.EntityFrameworkCore;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -11,6 +13,12 @@ builder.Services.AddSingleton<IDependencyBootstrapper, WhisperAndFfmpegBootstrap
 builder.Services.AddSingleton<ITranscriptionFacade, WhisperNetTranscriptionFacade>();
 builder.Services.AddHostedService<TranscriptionWorker>();
 
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContext<TranscriptionDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+//services
+builder.Services.AddScoped<TranscriptionDataService>();
 
 // Messaging - RabbitMQ
 builder.Services.AddOptions<RabbitMqOptions>()
