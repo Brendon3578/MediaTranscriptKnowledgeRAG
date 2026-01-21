@@ -1,11 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Upload.Api.Infrastructure;
-using Upload.Api.Infrastructure.DTOs;
-using Upload.Api.Infrastructure.Entities;
-using Upload.Api.Infrastructure.Enum;
-using Upload.Api.Infrastructure.FileStorage;
-using Upload.Api.Messaging;
-using Upload.Api.Services;
+using Upload.Api.Interfaces;
+using Upload.Api.Models.DTOs;
 
 namespace Upload.Api.Controllers
 {

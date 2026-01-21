@@ -5,7 +5,8 @@ using RabbitMQ.Client;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Upload.Api.Infrastructure.Configuration;
+using Upload.Api.Configuration;
+using Upload.Api.Interfaces;
 
 namespace Upload.Api.Messaging
 {

@@ -1,10 +1,8 @@
 
 using FFMpegCore;
-using MediaTranscription.Worker.Facade;
-using MediaTranscription.Worker.Infrastructure;
-using MediaTranscription.Worker.Infrastructure.Configuration;
-using MediaTranscription.Worker.Infrastructure.Entities;
+using MediaTranscription.Worker.Configuration;
 using MediaTranscription.Worker.Infrastructure.Services;
+using MediaTranscription.Worker.Interfaces;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -34,7 +32,7 @@ public class TranscriptionWorker : BackgroundService
 
 
     public TranscriptionWorker(
-        IOptions<RabbitMqOptions> rabbitMqOptions, 
+        IOptions<RabbitMqOptions> rabbitMqOptions,
         ILogger<TranscriptionWorker> logger,
         ITranscriptionFacade transcriptionFacade,
         IServiceScopeFactory scopeFactory
@@ -90,10 +88,6 @@ public class TranscriptionWorker : BackgroundService
                     mediaEvent.MediaId
                 );
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                // shutdown gracioso
-            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao processar mensagem");
@@ -105,23 +99,20 @@ public class TranscriptionWorker : BackgroundService
 
                 // Por ora, vamos fazer Nack para retentar
 
-                if (_channel is not null)
-                {
-                    //await _channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: true);
+                if (_channel.IsOpen)
                     await _channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: false);
-
-                }
+                //await _channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: true);
             }
         };
-        // Registra uma �nica vez e guarda a consumer tag para cancelar no StopAsync.
+        // Registra uma única vez e guarda a consumer tag para cancelar no StopAsync.
         _consumerTag = await _channel.BasicConsumeAsync(
-            queue: _rabbitMqOptions.ConsumeQueue ,
+            queue: _rabbitMqOptions.ConsumeQueue,
             autoAck: false,
             consumer: consumer,
             cancellationToken: stoppingToken
         ); // consumerTag pode ser usada para BasicCancelAsync.
 
-        // Mant�m o servi�o "vivo" at� o host pedir shutdown.
+        // Mantém o serviço "vivo" até o host pedir shutdown.
         await Task.Delay(Timeout.Infinite, stoppingToken);
 
     }
@@ -144,7 +135,7 @@ public class TranscriptionWorker : BackgroundService
 
             // 1. Transcrever usando o Facade
             var result = await _transcriptionFacade.TranscribeAsync(mediaEvent.FilePath, mediaEvent.ContentType, ct);
-            
+
             var duration = DateTime.UtcNow - startTime;
             _logger.LogInformation("Transcrição concluída para MediaId: {MediaId}. Segmentos: {Count}", mediaEvent.MediaId, result.Segments.Count);
 
@@ -153,7 +144,7 @@ public class TranscriptionWorker : BackgroundService
             await transcriptionDataService.RemoveExistingTranscriptionSegmentsByMediaId(mediaEvent.MediaId, ct);
 
             var transcriptionId = await transcriptionDataService.SaveTranscriptionAndSegments(result, mediaEvent, ct);
-            
+
             // 2. Publicar evento de conclusão
             var transcribedEvent = new MediaTranscribedEvent
             {
@@ -188,7 +179,7 @@ public class TranscriptionWorker : BackgroundService
             var properties = new BasicProperties()
             {
                 ContentType = "application/json",
-                MessageId= @event.TranscriptionId.ToString(),
+                MessageId = @event.TranscriptionId.ToString(),
                 CorrelationId = @event.MediaId.ToString(),
                 Persistent = true,
                 Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
@@ -238,7 +229,7 @@ public class TranscriptionWorker : BackgroundService
         );
 
         await _channel.QueueDeclareAsync(
-            queue: _rabbitMqOptions.ConsumeQueue ,
+            queue: _rabbitMqOptions.ConsumeQueue,
             durable: true,
             exclusive: false,
             autoDelete: false,
@@ -247,30 +238,30 @@ public class TranscriptionWorker : BackgroundService
         );
 
         await _channel.QueueBindAsync(
-            queue: _rabbitMqOptions.ConsumeQueue ,
+            queue: _rabbitMqOptions.ConsumeQueue,
             exchange: _rabbitMqOptions.ExchangeName,
-            routingKey: _rabbitMqOptions.ConsumeRoutingKey ,
+            routingKey: _rabbitMqOptions.ConsumeRoutingKey,
             cancellationToken: cancellationToken
         );
 
         _logger.LogInformation(
             "RabbitMQ configurado: Exchange={Exchange}, Queue={Queue}, RoutingKey={RoutingKey}",
             _rabbitMqOptions.ExchangeName,
-            _rabbitMqOptions.ConsumeQueue ,
-            _rabbitMqOptions.ConsumeRoutingKey 
+            _rabbitMqOptions.ConsumeQueue,
+            _rabbitMqOptions.ConsumeRoutingKey
         );
     }
 
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        // StopAsync � chamado no shutdown gracioso do host; bom lugar para encerrar consumo/conex�es. [web:3]
+        // StopAsync � chamado no shutdown gracioso do host; bom lugar para encerrar consumo/conex�es
 
         try
         {
             if (_channel is not null && !string.IsNullOrWhiteSpace(_consumerTag))
             {
-                await _channel.BasicCancelAsync(_consumerTag, cancellationToken: cancellationToken); // cancela subscription [web:23]
+                await _channel.BasicCancelAsync(_consumerTag, cancellationToken: cancellationToken); // cancela subscription
             }
         }
         catch (Exception ex)
@@ -280,7 +271,7 @@ public class TranscriptionWorker : BackgroundService
 
         try
         {
-            // Best practice: CloseAsync e depois DisposeAsync. [web:23]
+            // Best practice: CloseAsync e depois DisposeAsync
             if (_channel is not null)
             {
                 await _channel.CloseAsync(cancellationToken: cancellationToken);
@@ -295,7 +286,7 @@ public class TranscriptionWorker : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Falha ao fechar canal/conex�o RabbitMQ.");
+            _logger.LogWarning(ex, "Falha ao fechar canal/conexão RabbitMQ.");
         }
 
         await base.StopAsync(cancellationToken);

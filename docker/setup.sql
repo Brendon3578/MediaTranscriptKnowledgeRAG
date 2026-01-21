@@ -65,9 +65,11 @@ CREATE INDEX idx_segments_media_index ON transcription_segments(media_id, segmen
 -- tabela embeddings
 -- =========================
 CREATE TABLE embeddings (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     media_id UUID NOT NULL,
     transcription_id UUID NOT NULL,
+    transcription_segment_id UUID NOT NULL,
+    model_name TEXT NOT NULL,
     chunk_text TEXT NOT NULL,
     embedding VECTOR(768),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -80,11 +82,19 @@ CREATE TABLE embeddings (
     CONSTRAINT fk_embedding_transcription
         FOREIGN KEY (transcription_id)
         REFERENCES transcriptions(id)
+        ON DELETE CASCADE,
+
+    CONSTRAINT fk_embedding_segment
+        FOREIGN KEY (transcription_segment_id)
+        REFERENCES transcription_segments(id)
         ON DELETE CASCADE
 );
 
+CREATE UNIQUE INDEX uq_embedding_segment_model
+ON embeddings (transcription_segment_id, model_name);
+
 -- =========================
--- �ndice vetorial (RAG)
+-- Índice vetorial (RAG)
 -- =========================
 CREATE INDEX embeddings_embedding_idx
 ON embeddings

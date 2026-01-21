@@ -1,7 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Upload.Api.Configuration;
+using Upload.Api.Data;
 using Upload.Api.Infrastructure;
-using Upload.Api.Infrastructure.Configuration;
-using Upload.Api.Infrastructure.FileStorage;
+using Upload.Api.Interfaces;
 using Upload.Api.Messaging;
 using Upload.Api.Services;
 
@@ -23,7 +24,7 @@ builder.Services.AddDbContext<UploadDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 // File Storage
-builder.Services.AddSingleton<IFileStorage, LocalFileStorage>();
+builder.Services.AddSingleton<IFileStorageFacade, LocalFileStorage>();
 
 
 // Messaging - RabbitMQ

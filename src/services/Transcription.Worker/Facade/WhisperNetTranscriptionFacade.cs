@@ -1,5 +1,6 @@
-using MediaTranscription.Worker.Infrastructure.Configuration;
+using MediaTranscription.Worker.Configuration;
 using MediaTranscription.Worker.Infrastructure.Services;
+using MediaTranscription.Worker.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text;

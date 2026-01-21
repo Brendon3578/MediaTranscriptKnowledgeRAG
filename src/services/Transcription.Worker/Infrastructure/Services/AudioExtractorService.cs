@@ -1,5 +1,5 @@
 using FFMpegCore;
-using MediaTranscription.Worker.Infrastructure.Configuration;
+using MediaTranscription.Worker.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -23,7 +23,11 @@ namespace MediaTranscription.Worker.Infrastructure.Services
             // Opcional: Configurar caminho do binário se não estiver no PATH
             if (!string.IsNullOrEmpty(_options.ExecutablePath) && Path.IsPathRooted(_options.ExecutablePath))
             {
-                GlobalFFOptions.Configure(new FFOptions { BinaryFolder = Path.GetDirectoryName(_options.ExecutablePath) });
+                var ffmpegDir = Path.GetDirectoryName(_options.ExecutablePath);
+                if (string.IsNullOrEmpty(ffmpegDir))
+                    throw new InvalidOperationException("FFMpeg directory not defined.");
+
+                GlobalFFOptions.Configure(new FFOptions { BinaryFolder = ffmpegDir });
             }
         }
 

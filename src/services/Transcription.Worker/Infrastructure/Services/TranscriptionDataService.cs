@@ -1,10 +1,7 @@
-﻿using MediaTranscription.Worker.Facade;
-using MediaTranscription.Worker.Infrastructure.Entities;
+﻿using MediaTranscription.Worker.Data;
+using MediaTranscription.Worker.Interfaces;
+using MediaTranscription.Worker.Models.Entities;
 using Shared.Contracts.Events;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading;
 
 namespace MediaTranscription.Worker.Infrastructure.Services
 {

@@ -1,9 +1,10 @@
 using MediaTranscription.Worker;
 using MediaTranscription.Worker.Facade;
-using MediaTranscription.Worker.Infrastructure.Configuration;
 using MediaTranscription.Worker.Infrastructure.Services;
-using MediaTranscription.Worker.Infrastructure;
 using Microsoft.EntityFrameworkCore;
+using MediaTranscription.Worker.Data;
+using MediaTranscription.Worker.Interfaces;
+using MediaTranscription.Worker.Configuration;
 
 var builder = Host.CreateApplicationBuilder(args);
 

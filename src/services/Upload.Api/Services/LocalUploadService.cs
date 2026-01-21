@@ -1,26 +1,23 @@
 ﻿using Microsoft.Extensions.Options;
 using Shared.Contracts.Events;
-using Upload.Api.Controllers;
-using Upload.Api.Infrastructure;
-using Upload.Api.Infrastructure.Configuration;
-using Upload.Api.Infrastructure.DTOs;
-using Upload.Api.Infrastructure.Entities;
-using Upload.Api.Infrastructure.Enum;
-using Upload.Api.Infrastructure.FileStorage;
-using Upload.Api.Messaging;
+using Upload.Api.Configuration;
+using Upload.Api.Data;
+using Upload.Api.Interfaces;
+using Upload.Api.Models.DTOs;
+using Upload.Api.Models.Entities;
 
 namespace Upload.Api.Services
 {
     public class LocalUploadService : IUploadService
     {
-        private readonly IFileStorage _fileStorage;
+        private readonly IFileStorageFacade _fileStorage;
         private readonly UploadDbContext _context;
         private readonly IEventPublisher _eventPublisher;
         private readonly ILogger<LocalUploadService> _logger;
         private readonly RabbitMqOptions _rabbitMqOptions;
 
         public LocalUploadService(
-            IFileStorage fileStorage,
+            IFileStorageFacade fileStorage,
             UploadDbContext context,
             IEventPublisher eventPublisher,
             ILogger<LocalUploadService> logger,

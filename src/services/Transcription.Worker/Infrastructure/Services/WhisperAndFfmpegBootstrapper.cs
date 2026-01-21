@@ -1,5 +1,6 @@
 using FFMpegCore;
-using MediaTranscription.Worker.Infrastructure.Configuration;
+using MediaTranscription.Worker.Configuration;
+using MediaTranscription.Worker.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xabe.FFmpeg.Downloader;
@@ -35,7 +36,7 @@ namespace MediaTranscription.Worker.Infrastructure.Services
 
                 // 2. Garantir FFmpeg
                 _logger.LogInformation("Verificando FFmpeg...");
-                var ffmpegDir = Path.Combine(AppContext.BaseDirectory, "ffmpeg");
+                var ffmpegDir = Path.Combine(AppContext.BaseDirectory, _ffmpegOptions.ExecutablePath);
                 if (!Directory.Exists(ffmpegDir))
                 {
                     Directory.CreateDirectory(ffmpegDir);
