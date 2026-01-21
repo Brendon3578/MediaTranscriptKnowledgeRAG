@@ -76,6 +76,43 @@ sequenceDiagram
     MQ ->> EW: MediaTranscribedEvent
     EW ->> EW: Gera embeddings (Ollama)
     EW ->> DB: Salva embeddings (pgvector)
+```
+
+#### Modelo de Dados (Visão Conceitual)
+
+```mermaid
+erDiagram
+    MEDIA ||--o{ TRANSCRIPTIONS : has
+    TRANSCRIPTIONS ||--o{ TRANSCRIPTION_SEGMENTS : contains
+    TRANSCRIPTION_SEGMENTS ||--o{ EMBEDDINGS : generates
+
+    MEDIA {
+        uuid id
+        string file_name
+        string content_type
+    }
+
+    TRANSCRIPTIONS {
+        uuid id
+        uuid media_id
+        text text
+    }
+
+    TRANSCRIPTION_SEGMENTS {
+        uuid id
+        uuid transcription_id
+        int segment_index
+        float start_seconds
+        float end_seconds
+        text text
+    }
+
+    EMBEDDINGS {
+        uuid id
+        uuid transcription_segment_id
+        string model_name
+        vector embedding
+    }
 
 
 ```
@@ -174,7 +211,7 @@ A API de consulta implementa o padrão **Retrieval-Augmented Generation**:
 2. **Suba a infraestrutura (RabbitMQ + Postgres)**
 
     ```bash
-    docker-compose up -d postgres rabbitmq
+    docker-compose up -d
     ```
 
 3. **Execute as aplicações**
