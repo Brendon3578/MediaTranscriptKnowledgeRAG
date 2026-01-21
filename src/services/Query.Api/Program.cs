@@ -1,8 +1,33 @@
+using Microsoft.Extensions.AI;
+using Query.Api.Repositories;
+using Query.Api.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
+
+// AI Configuration
+var ollamaUrl = builder.Configuration["Embedding:BaseUrl"] ?? "http://localhost:11434";
+var embeddingModel = builder.Configuration["Embedding:Model"] ?? "nomic-embed-text";
+var chatModel = builder.Configuration["Chat:Model"] ?? "llama3";
+
+// Register Embedding Generator
+builder.Services.AddEmbeddingGenerator<string, Embedding<float>>(b =>
+    b.Use(new OllamaEmbeddingGenerator(new Uri(ollamaUrl), embeddingModel)));
+
+// Register Chat Client
+builder.Services.AddChatClient(sp => {
+    return new OllamaChatClient(new Uri(ollamaUrl), chatModel);
+});
+
+// Application Services
+builder.Services.AddScoped<VectorSearchRepository>();
+builder.Services.AddScoped<EmbeddingQueryService>();
+builder.Services.AddScoped<RagChatService>();
+builder.Services.AddScoped<RagFacade>();
 
 var app = builder.Build();
 
@@ -13,29 +38,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.UseAuthorization();
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
