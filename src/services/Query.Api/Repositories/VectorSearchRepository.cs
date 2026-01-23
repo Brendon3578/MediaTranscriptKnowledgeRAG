@@ -1,29 +1,28 @@
+﻿using System.Data;
 using Dapper;
 using Npgsql;
 using Pgvector;
-using Pgvector.Dapper;
 using Query.Api.DTOs;
 
 namespace Query.Api.Repositories
 {
-    public class VectorSearchRepository
+    public sealed class VectorSearchRepository
     {
         private readonly string _connectionString;
 
         public VectorSearchRepository(IConfiguration configuration)
         {
-            _connectionString = configuration.GetConnectionString("Postgres") 
+            _connectionString = configuration.GetConnectionString("Postgres")
                 ?? throw new ArgumentNullException("Connection string 'Postgres' not found.");
-            
-            SqlMapper.AddTypeHandler(new VectorTypeHandler());
         }
 
-        public async Task<List<ResultSource>> SearchAsync(Vector queryEmbedding, string modelName, QueryFilters? filters, int topK)
+        public async Task<List<ResultSource>> SearchAsync(
+            Vector queryEmbedding,
+            string modelName,
+            QueryFilters? filters,
+            int topK)
         {
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-
-            var sql = @"
+            const string sql = """
                 SELECT 
                     ts.media_id AS MediaId,
                     ts.text AS Text,
@@ -38,20 +37,64 @@ namespace Query.Api.Repositories
                   AND (@start IS NULL OR ts.start_seconds >= @start)
                   AND (@end IS NULL OR ts.end_seconds <= @end)
                 ORDER BY Distance
-                LIMIT @topK";
+                LIMIT @topK
+            """;
 
-            var parameters = new
+            var dataSourceBuilder = new NpgsqlDataSourceBuilder(_connectionString);
+            dataSourceBuilder.UseVector();
+            var dataSource = dataSourceBuilder.Build();
+
+
+            await using var conn = await dataSource.OpenConnectionAsync();
+
+            // 🔴 Parâmetro pgvector CRÍTICO
+            var vectorParameter = new NpgsqlParameter
             {
-                queryEmbedding,
-                modelName,
-                mediaIds = filters?.MediaIds?.Any() == true ? filters.MediaIds.ToArray() : null,
-                start = filters?.StartSeconds,
-                end = filters?.EndSeconds,
-                topK
+                ParameterName = "queryEmbedding",
+                Value = queryEmbedding,
+                DataTypeName = "vector"
             };
 
-            var results = await conn.QueryAsync<ResultSource>(sql, parameters);
-            return results.ToList();
+            using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.Add(vectorParameter);
+
+            cmd.Parameters.AddWithValue("modelName", modelName);
+            cmd.Parameters.AddWithValue("topK", topK);
+
+            cmd.Parameters.AddWithValue(
+                "mediaIds",
+                filters?.MediaIds?.Any() == true
+                    ? filters.MediaIds.ToArray()
+                    : DBNull.Value
+            );
+
+            cmd.Parameters.AddWithValue(
+                "start",
+                filters?.StartSeconds ?? (object)DBNull.Value
+            );
+
+            cmd.Parameters.AddWithValue(
+                "end",
+                filters?.EndSeconds ?? (object)DBNull.Value
+            );
+
+            using var reader = await cmd.ExecuteReaderAsync();
+
+            var results = new List<ResultSource>();
+
+            while (await reader.ReadAsync())
+            {
+                results.Add(new ResultSource
+                {
+                    MediaId = reader.GetGuid(reader.GetOrdinal("MediaId")),
+                    Text = reader.GetString(reader.GetOrdinal("Text")),
+                    Start = reader.GetFloat(reader.GetOrdinal("Start")),
+                    End = reader.GetFloat(reader.GetOrdinal("End")),
+                    Distance = reader.GetFloat(reader.GetOrdinal("Distance"))
+                });
+            }
+
+            return results;
         }
     }
 }

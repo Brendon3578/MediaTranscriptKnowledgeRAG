@@ -24,7 +24,7 @@ namespace MediaEmbedding.Worker.Models
         [Column("chunk_text")]
         public string ChunkText { get; set; } = null!;
 
-        [Column("embedding", TypeName = "vector(768)")]
+        [Column("embedding", TypeName = "vector(1024)")]
         public Vector? EmbeddingVector { get; set; }
 
         [Column("created_at")]

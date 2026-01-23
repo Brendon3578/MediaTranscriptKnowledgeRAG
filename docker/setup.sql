@@ -71,7 +71,7 @@ CREATE TABLE embeddings (
     transcription_segment_id UUID NOT NULL,
     model_name TEXT NOT NULL,
     chunk_text TEXT NOT NULL,
-    embedding VECTOR(768),
+    embedding VECTOR(1024),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     CONSTRAINT fk_embedding_media

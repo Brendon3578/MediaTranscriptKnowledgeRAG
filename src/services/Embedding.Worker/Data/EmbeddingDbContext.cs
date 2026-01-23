@@ -21,7 +21,7 @@ namespace MediaEmbedding.Worker.Data
                 e.HasKey(x => x.Id);
                 e.Property(x => x.ChunkText).IsRequired();
                 e.Property(x => x.ModelName).IsRequired();
-                e.Property(x => x.EmbeddingVector).HasColumnType("vector(768)");
+                e.Property(x => x.EmbeddingVector);
                 e.Property(x => x.CreatedAt);
                 
                 // Idempotency index

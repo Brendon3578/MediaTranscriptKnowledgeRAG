@@ -6,13 +6,13 @@ namespace Query.Api.Services
 {
     public class RagFacade
     {
-        private readonly EmbeddingQueryService _embeddingService;
+        private readonly EmbeddingGeneratorService _embeddingService;
         private readonly VectorSearchRepository _vectorRepo;
         private readonly RagChatService _chatService;
         private readonly IConfiguration _configuration;
 
         public RagFacade(
-            EmbeddingQueryService embeddingService,
+            EmbeddingGeneratorService embeddingService,
             VectorSearchRepository vectorRepo,
             RagChatService chatService,
             IConfiguration configuration)

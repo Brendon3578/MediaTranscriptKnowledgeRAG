@@ -23,6 +23,11 @@ namespace Query.Api.Controllers
                 return BadRequest("A pergunta não pode estar vazia.");
             }
 
+            if (request.Filters == null || request.Filters.MediaIds == null)
+            {
+                return BadRequest("Selecione uma mídia para consultar.");
+            }
+
             try
             {
                 var response = await _ragFacade.ProcessQueryAsync(request);

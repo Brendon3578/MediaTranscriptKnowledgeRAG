@@ -3,11 +3,11 @@ using Pgvector;
 
 namespace Query.Api.Services
 {
-    public class EmbeddingQueryService
+    public class EmbeddingGeneratorService
     {
         private readonly IEmbeddingGenerator<string, Embedding<float>> _generator;
 
-        public EmbeddingQueryService(IEmbeddingGenerator<string, Embedding<float>> generator)
+        public EmbeddingGeneratorService(IEmbeddingGenerator<string, Embedding<float>> generator)
         {
             _generator = generator;
         }

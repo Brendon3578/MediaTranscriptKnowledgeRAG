@@ -62,6 +62,7 @@ namespace MediaTranscription.Worker.Facade
 
                 // final text transcript
                 var sb = new StringBuilder();
+
                 
                 await foreach (var segment in processor.ProcessAsync(fileStream, cancellationToken))
                 {
