@@ -24,20 +24,21 @@ namespace Query.Api.Repositories
         {
             const string sql = """
                 SELECT 
-                    ts.media_id AS MediaId,
-                    ts.text AS Text,
-                    ts.start_seconds AS Start,
-                    ts.end_seconds AS End,
-                    e.embedding <=> @queryEmbedding AS Distance
-                FROM embeddings e
-                JOIN transcription_segments ts 
-                    ON ts.id = e.transcription_segment_id
-                WHERE e.model_name = @modelName
-                  AND (@mediaIds IS NULL OR e.media_id = ANY(@mediaIds))
-                  AND (@start IS NULL OR ts.start_seconds >= @start)
-                  AND (@end IS NULL OR ts.end_seconds <= @end)
-                ORDER BY Distance
-                LIMIT @topK
+                ts.media_id       AS MediaId,
+                ts.text           AS Text,
+                ts.start_seconds  AS Start,
+                ts.end_seconds    AS End,
+                (e.embedding <=> @queryEmbedding) AS Distance
+            FROM embeddings e
+            JOIN transcription_segments ts 
+                ON ts.id = e.transcription_segment_id
+            WHERE e.model_name = @modelName
+              AND (e.embedding <=> @queryEmbedding) < @maxDistance
+              AND (@mediaIds IS NULL OR e.media_id = ANY(@mediaIds))
+              AND (@start IS NULL OR ts.start_seconds >= @start)
+              AND (@end IS NULL OR ts.end_seconds <= @end)
+            ORDER BY Distance
+            LIMIT @topK;
             """;
 
             var dataSourceBuilder = new NpgsqlDataSourceBuilder(_connectionString);
@@ -60,6 +61,9 @@ namespace Query.Api.Repositories
 
             cmd.Parameters.AddWithValue("modelName", modelName);
             cmd.Parameters.AddWithValue("topK", topK);
+
+            cmd.Parameters.AddWithValue("maxDistance", 0.5f);
+
 
             cmd.Parameters.AddWithValue(
                 "mediaIds",
