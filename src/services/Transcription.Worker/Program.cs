@@ -1,15 +1,15 @@
 using MediaTranscription.Worker;
-using MediaTranscription.Worker.Facade;
-using MediaTranscription.Worker.Infrastructure.Services;
-using Microsoft.EntityFrameworkCore;
-using MediaTranscription.Worker.Data;
-using MediaTranscription.Worker.Interfaces;
+using MediaTranscription.Worker.Application;
+using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Configuration;
+using MediaTranscription.Worker.Infrastructure;
+using MediaTranscription.Worker.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddSingleton<IAudioExtractorService, AudioExtractorService>();
-builder.Services.AddSingleton<IWhisperModelProvider, WhisperGgmlModelProvider>();
+builder.Services.AddSingleton<IWhisperModelProvider, WhisperAIModelProvider>();
 builder.Services.AddSingleton<IDependencyBootstrapper, WhisperAndFfmpegBootstrapper>();
 builder.Services.AddSingleton<ITranscriptionFacade, WhisperNetTranscriptionFacade>();
 builder.Services.AddHostedService<TranscriptionWorker>();
@@ -19,7 +19,7 @@ builder.Services.AddDbContext<TranscriptionDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 //services
-builder.Services.AddScoped<TranscriptionDataService>();
+builder.Services.AddScoped<TranscriptionRepository>();
 
 // Messaging - RabbitMQ
 builder.Services.AddOptions<RabbitMqOptions>()
@@ -27,16 +27,7 @@ builder.Services.AddOptions<RabbitMqOptions>()
     .ValidateDataAnnotations() // Enable validation using data annotations
     .ValidateOnStart();       // Enforce validation at application startup
 
-builder.Services.AddOptions<WhisperOptions>()
-    .Bind(builder.Configuration.GetSection("Whisper"))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-
-builder.Services.AddOptions<FFmpegOptions>()
-    .Bind(builder.Configuration.GetSection("FFmpeg"))
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
-
+// other options removed - using IConfiguration directly
 
 var host = builder.Build();
 

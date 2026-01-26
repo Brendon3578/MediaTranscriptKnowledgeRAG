@@ -1,16 +1,15 @@
 using MediaEmbedding.Worker;
-using MediaEmbedding.Worker.Configuration;
-using MediaEmbedding.Worker.Consumers;
-using MediaEmbedding.Worker.Data;
-using MediaEmbedding.Worker.Embeddings;
-using MediaEmbedding.Worker.Services;
+using MediaEmbedding.Worker.Application.Interfaces;
+using MediaEmbedding.Worker.Application.UseCases;
+using MediaEmbedding.Worker.Infrastructure.AI;
+using MediaEmbedding.Worker.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
 var builder = Host.CreateApplicationBuilder(args);
 
 // Configuration
-builder.Services.Configure<RabbitMqOptions>(builder.Configuration.GetSection("RabbitMq"));
+// Removed Options configuration
 
 // Database
 var connectionString = builder.Configuration.GetConnectionString("Postgres");
@@ -30,7 +29,7 @@ builder.Services.AddEmbeddingGenerator<string, Embedding<float>>(b =>
 // Services
 builder.Services.AddScoped<IEmbeddingService, OllamaEmbeddingService>();
 builder.Services.AddScoped<MediaTranscribedConsumer>();
-builder.Services.AddScoped<EmbeddingDataService>();
+builder.Services.AddScoped<GenerateEmbeddingUseCase>();
 
 // Hosted Service (RabbitMQ Listener)
 builder.Services.AddHostedService<EmbeddingWorker>();

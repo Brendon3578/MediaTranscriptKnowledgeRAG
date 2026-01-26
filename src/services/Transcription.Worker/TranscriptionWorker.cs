@@ -1,8 +1,8 @@
 
 using FFMpegCore;
+using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Configuration;
-using MediaTranscription.Worker.Infrastructure.Services;
-using MediaTranscription.Worker.Interfaces;
+using MediaTranscription.Worker.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -16,7 +16,7 @@ namespace MediaTranscription.Worker;
 
 public class TranscriptionWorker : BackgroundService
 {
-    private readonly RabbitMqOptions _rabbitMqOptions;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<TranscriptionWorker> _logger;
     private readonly ITranscriptionFacade _transcriptionFacade;
     private IConnection? _connection;
@@ -25,6 +25,8 @@ public class TranscriptionWorker : BackgroundService
 
     private readonly IServiceScopeFactory _scopeFactory;
 
+    private readonly RabbitMqOptions _rabbitMqOptions;
+
     private readonly JsonSerializerOptions _jsonSerializerOptions = new()
     {
         WriteIndented = false
@@ -32,16 +34,18 @@ public class TranscriptionWorker : BackgroundService
 
 
     public TranscriptionWorker(
-        IOptions<RabbitMqOptions> rabbitMqOptions,
+        IConfiguration configuration,
         ILogger<TranscriptionWorker> logger,
         ITranscriptionFacade transcriptionFacade,
-        IServiceScopeFactory scopeFactory
+        IServiceScopeFactory scopeFactory,
+        IOptions<RabbitMqOptions> rabbitMqOptions
         )
     {
-        _rabbitMqOptions = rabbitMqOptions.Value;
+        _configuration = configuration;
         _logger = logger;
         _transcriptionFacade = transcriptionFacade;
         _scopeFactory = scopeFactory;
+        _rabbitMqOptions = rabbitMqOptions.Value;
     }
 
 
@@ -73,14 +77,14 @@ public class TranscriptionWorker : BackgroundService
                 if (mediaEvent is null)
                 {
                     _logger.LogWarning("Falha ao desserializar a mensagem.");
-                    // Decide se descarta ou reenfileira; aqui ser� reenfileirado:
+                    // Decide se descarta ou reenfileira; aqui será reenfileirado:
                     await _channel.BasicNackAsync(eventArgs.DeliveryTag, multiple: false, requeue: true);
                     return;
                 }
 
                 await ProcessMediaAsync(mediaEvent, stoppingToken);
 
-                // Acknowledge apenas ap�s processar com sucesso
+                // Acknowledge apenas após processar com sucesso
                 await _channel.BasicAckAsync(eventArgs.DeliveryTag, false);
 
                 _logger.LogInformation(
@@ -106,7 +110,7 @@ public class TranscriptionWorker : BackgroundService
         };
         // Registra uma única vez e guarda a consumer tag para cancelar no StopAsync.
         _consumerTag = await _channel.BasicConsumeAsync(
-            queue: _rabbitMqOptions.ConsumeQueue,
+            queue: _configuration["RabbitMq:ConsumeQueue"],
             autoAck: false,
             consumer: consumer,
             cancellationToken: stoppingToken
@@ -127,7 +131,7 @@ public class TranscriptionWorker : BackgroundService
             mediaEvent.FileSizeBytes);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var transcriptionDataService = scope.ServiceProvider.GetRequiredService<TranscriptionDataService>();
+        var transcriptionDataService = scope.ServiceProvider.GetRequiredService<TranscriptionRepository>();
 
         try
         {

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.AI;
-using Query.Api.Configuration;
-using Query.Api.Repositories;
-using Query.Api.Services;
+using Query.Api.Application;
+using Query.Api.Infrastructure;
+using Query.Api.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,41 +11,27 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 
-// Options Configuration
-EmbeddingOptions embeddingOpt = new();
-builder.Configuration.GetSection("Embedding")
-    .Bind(embeddingOpt, opt =>
-    {
-        opt.ErrorOnUnknownConfiguration = true;
-    });
-
-ChatConfigOptions chatOpt = new();
-
-builder.Configuration.GetSection("Chat")
-    .Bind(chatOpt, opt =>
-    {
-        opt.ErrorOnUnknownConfiguration = true;
-    });
-
-
-
-
 // AI Configuration
+var embeddingBaseUrl = builder.Configuration["Embedding:BaseUrl"] ?? "http://localhost:11434";
+var embeddingModel = builder.Configuration["Embedding:Model"] ?? "bge-m3";
 
 // Register Embedding Generator
 builder.Services.AddEmbeddingGenerator<string, Embedding<float>>(b =>
-    b.Use(new OllamaEmbeddingGenerator(new Uri(embeddingOpt.BaseUrl), embeddingOpt.Model)));
+    b.Use(new OllamaEmbeddingGenerator(new Uri(embeddingBaseUrl), embeddingModel)));
+
+var chatBaseUrl = builder.Configuration["Chat:BaseUrl"] ?? "http://localhost:11434";
+var chatModel = builder.Configuration["Chat:Model"] ?? "phi3:mini";
 
 // Register Chat Client
 builder.Services.AddChatClient(sp =>
 {
-    return new OllamaChatClient(new Uri(chatOpt.BaseUrl), chatOpt.Model);
+    return new OllamaChatClient(new Uri(chatBaseUrl), chatModel);
 });
 
 // Application Services
-builder.Services.AddScoped<VectorSearchRepository>();
+builder.Services.AddScoped<TranscriptionSegmentVectorSearchRepository>();
 builder.Services.AddScoped<EmbeddingGeneratorService>();
-builder.Services.AddScoped<RagChatService>();
+builder.Services.AddScoped<GenerateAnswerUseCase>();
 builder.Services.AddScoped<RagFacade>();
 
 var app = builder.Build();
