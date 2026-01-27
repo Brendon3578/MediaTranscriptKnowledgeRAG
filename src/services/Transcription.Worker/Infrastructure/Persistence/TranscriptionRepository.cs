@@ -31,7 +31,7 @@ namespace MediaTranscription.Worker.Infrastructure.Persistence
             {
                 Id = transcriptionId,
                 MediaId = mediaEvent.MediaId,
-                Text = string.Empty,
+                Text = resultDto.TranscriptionText,
                 Language = resultDto.Language,
                 CreatedAt = DateTime.UtcNow
             };
