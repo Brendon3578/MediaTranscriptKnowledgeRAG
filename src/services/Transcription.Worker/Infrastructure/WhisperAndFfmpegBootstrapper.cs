@@ -1,6 +1,8 @@
 using FFMpegCore;
 using MediaTranscription.Worker.Application.Interfaces;
+using MediaTranscription.Worker.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
+using Whisper.net.Ggml;
 using Xabe.FFmpeg.Downloader;
 
 namespace MediaTranscription.Worker.Infrastructure
@@ -27,10 +29,10 @@ namespace MediaTranscription.Worker.Infrastructure
 
             try
             {
-                // 1. Garantir modelo Whisper
-                _logger.LogInformation("Verificando modelo Whisper...");
-                await _whisperModelProvider.EnsureModelAsync(cancellationToken);
-                _logger.LogInformation("Modelo Whisper pronto.");
+                // 1. Garantir modelo Whisper (Default Medium)
+                _logger.LogInformation("Verificando modelo Whisper padrão (Medium)...");
+                await _whisperModelProvider.EnsureModelAsync(GgmlType.Medium, cancellationToken);
+                _logger.LogInformation("Modelo Whisper padrão pronto.");
 
                 // 2. Garantir FFmpeg
                 _logger.LogInformation("Verificando FFmpeg...");

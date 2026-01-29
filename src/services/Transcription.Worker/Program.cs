@@ -3,6 +3,7 @@ using MediaTranscription.Worker.Application;
 using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Configuration;
 using MediaTranscription.Worker.Infrastructure;
+using MediaTranscription.Worker.Infrastructure.Interfaces;
 using MediaTranscription.Worker.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 

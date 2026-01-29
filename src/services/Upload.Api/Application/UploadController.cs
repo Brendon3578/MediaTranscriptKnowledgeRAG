@@ -1,6 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Upload.Api.Application.Interfaces;
 using Upload.Api.Domain.DTOs;
+using Upload.Api.Domain.Enum;
 
 namespace Upload.Api.Application
 {
@@ -31,7 +32,7 @@ namespace Upload.Api.Application
 
         [HttpPost]
         [RequestSizeLimit(MaxRequestSizeLimitInBytes)]
-        public async Task<IActionResult> Upload(IFormFile file, CancellationToken ct)
+        public async Task<IActionResult> Upload(IFormFile file, [FromQuery] string? model, CancellationToken ct)
         {
             try
             {
@@ -41,7 +42,19 @@ namespace Upload.Api.Application
                 if (!AllowedContentTypes.Contains(file.ContentType))
                     return BadRequest(new ErrorResponseRequest($"Tipo de arquivo não suportado: {file.ContentType}"));
 
-                var uploadMediaDto = await _uploadService.UploadFileAsync(file, ct);
+                var isEnumParsed = Enum.TryParse<WhisperModelTypesEnum.GgmlType>(model, true, out var parsedModel);
+
+                if (isEnumParsed == false && string.IsNullOrEmpty(model))
+                {
+                    parsedModel = WhisperModelTypesEnum.GgmlType.Medium; // Valor padrão
+                }
+                else if (isEnumParsed == false)
+                {
+                    return BadRequest("Modelo do whisper não encontrado");
+                }
+
+
+                var uploadMediaDto = await _uploadService.UploadFileAsync(file, parsedModel.ToString(), ct);
 
                 // Retorna 202 Accepted
                 return AcceptedAtAction(

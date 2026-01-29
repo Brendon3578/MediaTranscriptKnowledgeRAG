@@ -1,8 +1,11 @@
 using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Infrastructure;
+using MediaTranscription.Worker.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.Text;
 using Whisper.net;
+using Whisper.net.Ggml;
 
 namespace MediaTranscription.Worker.Application
 {
@@ -12,7 +15,6 @@ namespace MediaTranscription.Worker.Application
         private readonly IConfiguration _configuration;
         private readonly IAudioExtractorService _audioExtractor;
         private readonly IWhisperModelProvider _modelProvider;
-        private string? _cachedModelPath;
 
         public WhisperNetTranscriptionFacade(
             ILogger<WhisperNetTranscriptionFacade> logger,
@@ -26,24 +28,30 @@ namespace MediaTranscription.Worker.Application
             _modelProvider = modelProvider;
         }
 
-        public async Task<TranscriptionResultDto> TranscribeAsync(string filePath, string contentType, CancellationToken cancellationToken)
+        public async Task<TranscriptionResultDto> TranscribeAsync(string filePath, string contentType, string? modelName, CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Iniciando fluxo de transcrição para {FilePath}", filePath);
+            _logger.LogInformation("Iniciando fluxo de transcrição para {FilePath} com modelo {ModelName}", filePath, modelName);
 
-            // Garante que o modelo existe (baixa se necessário) na primeira execução ou recupera do cache
-            if (string.IsNullOrEmpty(_cachedModelPath))
+            // Determina modelo a usar (Default: Medium)
+            if (!Enum.TryParse<GgmlType>(modelName, true, out var modelType))
             {
-                _cachedModelPath = await _modelProvider.EnsureModelAsync(cancellationToken);
+                _logger.LogWarning("Modelo '{ModelName}' não reconhecido ou nulo. Usando padrão: Medium.", modelName);
+                modelType = GgmlType.Medium;
             }
+            
+            // Garante modelo (baixa se necessário)
+            var modelPath = await _modelProvider.EnsureModelAsync(modelType, cancellationToken);
 
             // 1. Extração/Conversão de áudio para formato compatível (WAV 16kHz mono)
             var audioPath = await _audioExtractor.ExtractAudioAsync(filePath, cancellationToken);
 
+            var stopwatch = Stopwatch.StartNew();
+
             try
             {
-                _logger.LogInformation("Carregando modelo Whisper de {ModelPath}", _cachedModelPath);
+                _logger.LogInformation("Carregando modelo Whisper de {ModelPath}", modelPath);
 
-                using var whisperFactory = WhisperFactory.FromPath(_cachedModelPath);
+                using var whisperFactory = WhisperFactory.FromPath(modelPath);
 
                 // Configura o builder
                 var language = _configuration["Whisper:Language"] ?? "auto";
@@ -64,24 +72,36 @@ namespace MediaTranscription.Worker.Application
                     segments.Add(new TranscriptionSegmentDto(
                         SegmentIndex: index++,
                         Text: segment.Text,
-                        StartSeconds: segment.Start.TotalSeconds, // validar se realmente é um valor double
+                        StartSeconds: segment.Start.TotalSeconds,
                         EndSeconds: segment.End.TotalSeconds
                     ));
 
-                    detectedLanguage = string.IsNullOrWhiteSpace(segment.Language) ? detectedLanguage : segment.Language;
+                    // Tenta capturar o idioma se vier do segmento
+                    if (!string.IsNullOrWhiteSpace(segment.Language))
+                    {
+                         detectedLanguage = segment.Language;
+                    }
                 }
+                
+                stopwatch.Stop();
+                var processingTime = stopwatch.Elapsed.TotalSeconds;
 
                 // --- PÓS-PROCESSAMENTO PARA RAG ---
                 var optimizedSegments = EnhanceTranscriptionSegments(segments);
-                // Recalcula o texto completo baseado nos segmentos otimizados (opcional, mas mantém consistência)
-                // Porém, para manter o original exato, podemos deixar o 'sb' ou reconstruir. 
-                // Vamos reconstruir para garantir que os segmentos otimizados reflitam o texto final.
+                
+                // Recalcula o texto completo baseado nos segmentos otimizados
                 var finalTranscription = string.Join(" ", optimizedSegments.Select(s => s.Text));
 
-                _logger.LogInformation("Transcrição concluída. Segmentos originais: {OriginalCount}, Otimizados: {OptimizedCount}",
-                    segments.Count, optimizedSegments.Count);
+                _logger.LogInformation("Transcrição concluída em {ProcessingTime}s. Modelo: {Model}. Segmentos: {Count}", 
+                    processingTime, modelType, optimizedSegments.Count);
 
-                return new TranscriptionResultDto(finalTranscription, optimizedSegments, detectedLanguage);
+                return new TranscriptionResultDto(
+                    finalTranscription, 
+                    optimizedSegments, 
+                    detectedLanguage, 
+                    modelType.ToString(), 
+                    processingTime
+                );
             }
             catch (Exception ex)
             {
@@ -151,7 +171,6 @@ namespace MediaTranscription.Worker.Application
                     }
                     
                     // Se não termina com pontuação, mas já está ficando muito grande (tokens/chars), força o corte
-                    // 1 token ~ 4 chars. 600 tokens ~ 2400 chars.
                     if (currentTextLength > (MAX_TOKENS_APPROX * 4)) 
                     {
                          FlushBuffer(optimized, currentBuffer);

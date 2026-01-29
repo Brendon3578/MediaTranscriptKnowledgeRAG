@@ -24,6 +24,8 @@ CREATE TABLE transcriptions (
     media_id UUID NOT NULL,
     text TEXT NOT NULL,
     language TEXT,
+    model_name TEXT, -- Novo campo: Modelo utilizado (ex: Medium, SmallEn)
+    processing_time_seconds REAL, -- Novo campo: Tempo de processamento em segundos
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 
     CONSTRAINT fk_transcription_media

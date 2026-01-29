@@ -29,9 +29,7 @@ namespace Upload.Api.Application
             _configuration = configuration;
         }
 
-
-
-        public async Task<MediaUploadDto> UploadFileAsync(IFormFile file, CancellationToken ct)
+        public async Task<MediaUploadDto> UploadFileAsync(IFormFile file, string? model, CancellationToken ct)
         {
             _logger.LogInformation(
                    "Iniciando upload de {FileName} ({Size} bytes)",
@@ -49,7 +47,6 @@ namespace Upload.Api.Application
             }
 
             // Entidade no banco
-
             var media = new MediaEntity
             {
                 Id = Guid.NewGuid(),
@@ -64,8 +61,10 @@ namespace Upload.Api.Application
             _context.Media.Add(media);
             await _context.SaveChangesAsync(ct);
 
-
             _logger.LogInformation("Media {MediaId} salva no banco", media.Id);
+
+            // Determina modelo Whisper (default Medium)
+            var whisperModel = string.IsNullOrWhiteSpace(model) ? "Medium" : model;
 
             // Publica evento
             var uploadedEvent = new MediaUploadedEvent
@@ -75,7 +74,8 @@ namespace Upload.Api.Application
                 ContentType = media.ContentType,
                 FileName = media.FileName,
                 FileSizeBytes = media.FileSizeBytes,
-                UploadedAt = media.CreatedAt
+                UploadedAt = media.CreatedAt,
+                TranscriptionModel = whisperModel // Novo campo
             };
 
             var routingKey = _configuration["RabbitMq:RoutingKey"] ?? "media.uploaded";
@@ -85,7 +85,6 @@ namespace Upload.Api.Application
                 ct
             );
 
-
             var dto = new MediaUploadDto
             {
                 MediaId = media.Id,
@@ -93,6 +92,7 @@ namespace Upload.Api.Application
                 Status = media.Status.ToString(),
                 UploadedAt = media.CreatedAt,
                 UpdatedAt = media.UpdatedAt,
+                Model = whisperModel
             };
 
             return dto;
@@ -100,20 +100,17 @@ namespace Upload.Api.Application
 
         public async Task<MediaUploadDto?> GetStatus(Guid id, CancellationToken ct)
         {
-            var media = await _context.Media.FindAsync(new object[] { id }, ct);
+             var media = await _context.Media.FindAsync(new object[] { id }, ct);
+             if (media == null) return null;
 
-            if (media == null)
-                return null;
-
-            var dto = new MediaUploadDto
-            {
-                MediaId = media.Id,
-                FileName = media.FileName,
-                Status = media.Status.ToString(),
-                UploadedAt = media.CreatedAt,
-                UpdatedAt = media.UpdatedAt,
-            };
-            return dto;
+             return new MediaUploadDto
+             {
+                 MediaId = media.Id,
+                 FileName = media.FileName,
+                 Status = media.Status.ToString(),
+                 UploadedAt = media.CreatedAt,
+                 UpdatedAt = media.UpdatedAt
+             };
         }
     }
 }

@@ -16,6 +16,12 @@ namespace MediaTranscription.Worker.Domain
         [Column("language")]
         public string? Language { get; set; }
 
+        [Column("model_name")]
+        public string? ModelName { get; set; }
+
+        [Column("processing_time_seconds")]
+        public double? ProcessingTimeSeconds { get; set; }
+
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
     }

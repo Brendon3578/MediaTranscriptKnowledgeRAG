@@ -1,4 +1,4 @@
-﻿using MediaTranscription.Worker.Application.Interfaces;
+using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Domain;
 using Shared.Contracts.Events;
 
@@ -33,6 +33,8 @@ namespace MediaTranscription.Worker.Infrastructure.Persistence
                 MediaId = mediaEvent.MediaId,
                 Text = resultDto.TranscriptionText,
                 Language = resultDto.Language,
+                ModelName = resultDto.ModelName,
+                ProcessingTimeSeconds = resultDto.ProcessingTimeSeconds,
                 CreatedAt = DateTime.UtcNow
             };
             _db.Transcriptions.Add(transcription);

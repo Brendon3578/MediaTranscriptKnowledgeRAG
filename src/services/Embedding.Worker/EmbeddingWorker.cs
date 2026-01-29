@@ -66,6 +66,14 @@ namespace MediaEmbedding.Worker
 
                     await _channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
                 }
+                catch (HttpRequestException ex)
+                {
+                    _logger.LogError(ex, "Erro de rede ao processar mensagem, verifique se o serviço de geração de Embedding está acessível");
+
+                    // Nack com requeue para tentar novamente
+                    if (_channel.IsOpen)
+                        await _channel.BasicNackAsync(ea.DeliveryTag, false, true, stoppingToken);
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Erro ao processar mensagem");

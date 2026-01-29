@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Upload.Api.Application;
 using Upload.Api.Application.Interfaces;
+using Upload.Api.Configuration;
 using Upload.Api.Infrastructure.FileSystem;
 using Upload.Api.Infrastructure.Menssaging;
 using Upload.Api.Infrastructure.Persistence;
@@ -23,6 +24,13 @@ builder.Services.AddSingleton<IFileStorageFacade, LocalFileStorage>();
 
 // Messaging - RabbitMQ
 // Options removed - using IConfiguration directly in services
+// Messaging - RabbitMQ
+builder.Services.AddOptions<RabbitMqOptions>()
+    .Bind(builder.Configuration.GetSection("RabbitMq")) // Bind the "RabbitMq" section
+    .ValidateDataAnnotations() // Enable validation using data annotations
+    .ValidateOnStart();       // Enforce validation at application startup
+
+
 builder.Services.AddSingleton<RabbitMqEventPublisher>();
 builder.Services.AddSingleton<IEventPublisher>(sp =>
     sp.GetRequiredService<RabbitMqEventPublisher>());

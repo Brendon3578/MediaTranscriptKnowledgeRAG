@@ -7,5 +7,6 @@
         public string Status { get; set; } = string.Empty;
         public DateTime UploadedAt { get; set; }
         public DateTime? UpdatedAt { get; set; }
+        public string? Model { get; set; }
     }
 }

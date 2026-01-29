@@ -1,4 +1,4 @@
-﻿namespace Shared.Contracts.Events
+namespace Shared.Contracts.Events
 {
     public record MediaUploadedEvent
     {
@@ -8,5 +8,6 @@
         public string FileName { get; init; } = string.Empty;
         public long FileSizeBytes { get; init; }
         public DateTime UploadedAt { get; init; }
+        public string? TranscriptionModel { get; init; }
     }
 }

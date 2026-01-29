@@ -110,7 +110,7 @@ public class TranscriptionWorker : BackgroundService
         };
         // Registra uma única vez e guarda a consumer tag para cancelar no StopAsync.
         _consumerTag = await _channel.BasicConsumeAsync(
-            queue: _configuration["RabbitMq:ConsumeQueue"],
+            queue: _rabbitMqOptions.ConsumeQueue,
             autoAck: false,
             consumer: consumer,
             cancellationToken: stoppingToken
@@ -137,8 +137,8 @@ public class TranscriptionWorker : BackgroundService
         {
             var startTime = DateTime.UtcNow;
 
-            // 1. Transcrever usando o Facade
-            var result = await _transcriptionFacade.TranscribeAsync(mediaEvent.FilePath, mediaEvent.ContentType, ct);
+            // 1. Transcrever usando o Facade (Passando o modelo do evento)
+            var result = await _transcriptionFacade.TranscribeAsync(mediaEvent.FilePath, mediaEvent.ContentType, mediaEvent.TranscriptionModel, ct);
 
             var duration = DateTime.UtcNow - startTime;
             _logger.LogInformation("Transcrição concluída para MediaId: {MediaId}. Segmentos: {Count}", mediaEvent.MediaId, result.Segments.Count);

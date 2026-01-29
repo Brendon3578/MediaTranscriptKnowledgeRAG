@@ -6,7 +6,7 @@ namespace MediaTranscription.Worker.Application.Interfaces
     /// </summary>
     public interface ITranscriptionFacade
     {
-        Task<TranscriptionResultDto> TranscribeAsync(string filePath, string contentType, CancellationToken cancellationToken);
+        Task<TranscriptionResultDto> TranscribeAsync(string filePath, string contentType, string? modelName, CancellationToken cancellationToken);
     }
 
     public record TranscriptionSegmentDto(
@@ -19,6 +19,8 @@ namespace MediaTranscription.Worker.Application.Interfaces
     public record TranscriptionResultDto(
         string TranscriptionText,
         IReadOnlyList<TranscriptionSegmentDto> Segments,
-        string Language
+        string Language,
+        string ModelName,
+        double ProcessingTimeSeconds
     );
 }

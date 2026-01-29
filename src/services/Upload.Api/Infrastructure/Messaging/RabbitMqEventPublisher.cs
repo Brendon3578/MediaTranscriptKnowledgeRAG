@@ -1,19 +1,21 @@
 ﻿
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Upload.Api.Application.Interfaces;
+using Upload.Api.Configuration;
 
 namespace Upload.Api.Infrastructure.Menssaging
 {
     public class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
     {
-        private readonly IConfiguration _configuration;
         private readonly ILogger<RabbitMqEventPublisher> _logger;
         private IChannel? _channel; // antes era IModel
         private IConnection? _connection;
+        private readonly RabbitMqOptions _rabbitMqOptions;
 
         private readonly JsonSerializerOptions _jsonSerializerOptions = new()
         {
@@ -21,9 +23,9 @@ namespace Upload.Api.Infrastructure.Menssaging
         };
 
 
-        public RabbitMqEventPublisher(IConfiguration configuration, ILogger<RabbitMqEventPublisher> logger)
+        public RabbitMqEventPublisher(IOptions<RabbitMqOptions> rabbitMqOptions, ILogger<RabbitMqEventPublisher> logger)
         {
-            _configuration = configuration;
+            _rabbitMqOptions = rabbitMqOptions.Value;
             _logger = logger;
         }
 
@@ -32,27 +34,38 @@ namespace Upload.Api.Infrastructure.Menssaging
         {
             var factory = new ConnectionFactory
             {
-                HostName = _configuration["RabbitMq:HostName"],
-                Port = _configuration.GetValue<int>("RabbitMq:Port"),
-                UserName = _configuration["RabbitMq:UserName"],
-                Password = _configuration["RabbitMq:Password"],
+                HostName = _rabbitMqOptions.HostName,
+                Port = _rabbitMqOptions.Port,
+                UserName = _rabbitMqOptions.UserName,
+                Password = _rabbitMqOptions.Password,
             };
 
             _connection = await factory.CreateConnectionAsync(ct);
             _channel = await _connection.CreateChannelAsync(null, ct);
 
             await _channel.ExchangeDeclareAsync(
-                exchange: _configuration["RabbitMq:ExchangeName"],
-                type: _configuration["RabbitMq:ExchangeType"], // topic
+                exchange: _rabbitMqOptions.ExchangeName,
+                type: _rabbitMqOptions.ExchangeType, // topic
                 durable: true,
                 autoDelete: false,
                 cancellationToken: ct
             );
 
+            _channel.BasicReturnAsync += async (_, args) =>
+            {
+
+                var message = Encoding.UTF8.GetString(args.Body.ToArray());
+                _logger.LogError(
+                   "Mensagem NÃO roteada pelo RabbitMQ | Exchange={Exchange} | RoutingKey={RoutingKey}",
+                   args.Exchange,
+                   args.RoutingKey
+               );
+            };
+
             _logger.LogInformation(
                 "RabbitMQ conectado - Exchange: {Exchange}, Host: {Host}",
-                _configuration["RabbitMq:ExchangeName"],
-                _configuration["RabbitMq:HostName"]
+                _rabbitMqOptions.ExchangeName,
+                _rabbitMqOptions.HostName
             );
         }
 
@@ -76,11 +89,11 @@ namespace Upload.Api.Infrastructure.Menssaging
                 };
 
                 await _channel.BasicPublishAsync(
-                    exchange: _configuration["RabbitMq:ExchangeName"],
+                    exchange: _rabbitMqOptions.ExchangeName,
                     routingKey: routingKey,
                     body: rawBody,
                     cancellationToken: ct,
-                    mandatory: false, // TODO: validar isso depois
+                    mandatory: true, // TODO: validar isso depois
                     basicProperties: properties
                 );
             }

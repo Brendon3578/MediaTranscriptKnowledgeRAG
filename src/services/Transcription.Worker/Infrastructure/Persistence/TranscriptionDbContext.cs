@@ -44,6 +44,8 @@ namespace MediaTranscription.Worker.Infrastructure.Persistence
                 e.HasKey(x => x.Id);
                 e.Property(x => x.Text).IsRequired();
                 e.Property(x => x.Language);
+                e.Property(x => x.ModelName);
+                e.Property(x => x.ProcessingTimeSeconds);
                 e.Property(x => x.CreatedAt);
             });
 
