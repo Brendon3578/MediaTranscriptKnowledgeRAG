@@ -1,186 +1,198 @@
-# 🧠 PRD — Plataforma de Transcrição Segmentada + Embeddings (RAG-ready)
+# 📄 PRD — Sistema de Transcrição, Indexação Semântica e Busca (RAG)
 
-## 1️⃣ Visão Geral
+## 1. Visão Geral
 
-Sistema baseado em **microserviços orientados a eventos** para:
+O sistema tem como objetivo permitir o upload de arquivos de mídia (áudio/vídeo), realizar a transcrição automática do conteúdo, gerar embeddings vetoriais por segmento e disponibilizar uma API de consulta semântica baseada em similaridade vetorial (RAG).
 
-* Upload de áudio/vídeo
-* Transcrição **segmentada por tempo**
-* Geração futura de **embeddings por segmento**
-* Consulta semântica via LLM (RAG)
+A arquitetura é orientada a serviços independentes, comunicando-se de forma assíncrona via eventos (RabbitMQ), com persistência em PostgreSQL + pgvector e uso de IA local (Whisper + Ollama).
 
-Arquitetura pensada para:
+## 2. Objetivos do Produto
 
-* reprocessamento
-* auditoria
-* evolução de modelos
-* explicabilidade (timestamp)
+### Objetivo Principal
 
----
+Permitir que usuários façam buscas semânticas em conteúdos de mídia transcritos, retornando trechos relevantes com contexto temporal.
 
-## 2️⃣ Objetivos do Produto
+### Objetivos Secundários
 
-✔ Transcrever mídia em **segmentos temporais**
-✔ Permitir **busca semântica precisa**
-✔ Associar respostas a **momentos do vídeo/áudio**
-✔ Ser **agnóstico de IA** (local ou cloud)
-✔ Escalar por eventos (RabbitMQ)
+- Desacoplar upload, transcrição, embeddings e consulta
+- Suportar processamento assíncrono e escalável
+- Manter todo o processamento on-premise / local
+- Preparar base sólida para futuras extensões (resumo, insights, RAG avançado)
 
----
+## 3. Escopo Atual (O que o sistema FAZ)
 
-## 3️⃣ Fluxo Geral (Event-Driven)
+### ✅ Em escopo
 
-```txt
-Upload.Api
-  → media.uploaded
-      ↓
-Transcription.Worker
-  → transcrição segmentada
-  → media.transcribed
-      ↓
-Embedding.Worker
-  → embedding por segmento
-      ↓
-Query.Api (RAG)
-```
+- Upload de arquivos de mídia
+- Persistência dos metadados da mídia
+- Publicação de eventos de upload
+- Transcrição automática usando Whisper (segmentada por tempo)
+- Seleção dinâmica de modelo Whisper (Medium, Large, etc.)
+- Persistência da transcrição, métricas e dos segmentos
+- Geração de embeddings por segmento
+- Persistência vetorial usando pgvector
+- Busca semântica por similaridade
+- Geração de respostas via LLM com base nos trechos recuperados
 
----
+### ❌ Fora de escopo (por enquanto)
 
-## 4️⃣ Microserviços e Responsabilidades
+- Resumo automático
+- Análise de sentimento
+- Extração de insights
+- Interface gráfica
+- Autenticação/autorização
+- Versionamento de embeddings
+- Multi-tenant
 
-### 📤 Upload.Api
+## 4. Arquitetura Geral
 
-* Recebe arquivo
-* Salva localmente
-* Registra `media`
-* Publica `MediaUploadedEvent`
+### Estilo
 
----
+- Arquitetura orientada a eventos
+- Processamento assíncrono
+- Separação clara de responsabilidades
+- IA local (sem dependência de APIs externas)
 
-### 🎙 Transcription.Worker
+### Componentes Principais
 
-* Consome `media.uploaded`
-* Extrai áudio (FFmpeg)
-* Transcreve via Whisper local
-* **Gera segmentos com timestamps**
-* Salva segmentos no banco
-* Publica `MediaTranscribedEvent`
+| Serviço | Responsabilidade |
+| :--- | :--- |
+| **Upload.Api** | Receber arquivos e publicar eventos |
+| **Transcription.Worker** | Transcrever mídia em texto segmentado |
+| **Embedding.Worker** | Gerar embeddings por segmento |
+| **Query.Api** | Executar buscas semânticas e RAG |
+| **Shared** | Contratos e eventos compartilhados |
 
----
+## 5. Fluxo Principal do Sistema
 
-### 🧠 Embedding.Worker (futuro)
+### 5.1 Upload
 
-* Consome `media.transcribed`
-* Gera embedding **por segmento**
-* Salva no pgvector
+1. Usuário envia arquivo para **Upload.Api** (opcionalmente escolhendo o modelo Whisper)
+2. Arquivo é salvo localmente
+3. Metadados são persistidos no banco
+4. Evento `MediaUploadedEvent` é publicado no RabbitMQ
 
----
+### 5.2 Transcrição
 
-### 🔍 Query.Api (futuro)
+1. **Transcription.Worker** consome `MediaUploadedEvent`
+2. Áudio é extraído/convertido
+3. Whisper realiza a transcrição (usando modelo solicitado ou default)
+4. Texto é segmentado com timestamps
+5. Transcrição, métricas (tempo, modelo) e segmentos são salvos no banco
+6. Evento `MediaTranscribedEvent` é publicado
 
-* Busca semântica por embedding
-* Retorna:
+### 5.3 Geração de Embeddings
 
-  * texto
-  * timestamp
-  * referência de mídia
+1. **Embedding.Worker** consome `MediaTranscribedEvent`
+2. Segmentos ainda não processados são carregados
+3. Embeddings são gerados via Ollama
+4. Vetores são persistidos no PostgreSQL (pgvector)
+5. Processo é idempotente por (segmento + modelo)
 
----
+### 5.4 Consulta Semântica (RAG)
 
-## 5️⃣ Modelo de Dados (PostgreSQL + pgvector)
+1. Usuário envia pergunta para **Query.Api**
+2. Pergunta é convertida em embedding
+3. Consulta vetorial é executada ( `<=>` )
+4. Segmentos mais próximos são retornados
+5. Contexto é montado com timestamps
+6. LLM gera resposta baseada no contexto
 
-### 📄 media
+## 6. Modelo de Dados (Alto nível)
 
-```sql
-id UUID PK
-file_name TEXT
-file_path TEXT
-content_type TEXT
-duration_seconds INT
-status TEXT
-created_at TIMESTAMP
-```
+### media
 
----
+- `id` (UUID)
+- `file_name` (VARCHAR)
+- `file_path` (VARCHAR)
+- `content_type` (VARCHAR)
+- `status` (INTEGER)
+- `file_size_bytes` (BIGINT)
+- `created_at` (TIMESTAMP)
+- `updated_at` (TIMESTAMP)
 
-### 📝 transcriptions
+### transcriptions
 
-```sql
-id UUID PK
-media_id UUID FK
-language TEXT
-model_used TEXT
-created_at TIMESTAMP
-```
+- `id` (UUID)
+- `media_id` (UUID)
+- `text` (TEXT)
+- `language` (TEXT)
+- `model_name` (TEXT)
+- `processing_time_seconds` (REAL)
+- `created_at` (TIMESTAMP)
 
----
+### transcription_segments
 
-### 🧩 transcription_segments ⭐ (NOVA BASE)
+- `id` (UUID)
+- `transcription_id` (UUID)
+- `media_id` (UUID)
+- `segment_index` (INT)
+- `text` (TEXT)
+- `start_seconds` (REAL)
+- `end_seconds` (REAL)
+- `confidence` (REAL)
+- `created_at` (TIMESTAMP)
 
-```sql
-id UUID PK
-transcription_id UUID FK
-media_id UUID FK
-segment_index INT
-text TEXT
-start_seconds REAL
-end_seconds REAL
-confidence REAL
-created_at TIMESTAMP
-```
+### embeddings
 
- 🔑 **Essa tabela é a base do RAG**
+- `id` (UUID)
+- `media_id` (UUID)
+- `transcription_id` (UUID)
+- `transcription_segment_id` (UUID)
+- `model_name` (TEXT)
+- `chunk_text` (TEXT)
+- `embedding` (VECTOR)
+- `created_at` (TIMESTAMP)
 
----
+## 7. Tecnologias Utilizadas
 
-### 📐 embeddings (futuro)
+### Backend
 
-```sql
-id UUID PK
-segment_id UUID FK
-vector VECTOR(1536)
-created_at TIMESTAMP
-```
+- .NET 10
+- ASP.NET Web API
+- Background Workers
 
----
+### IA
 
-## 6️⃣ Decisões Importantes (Justificadas)
+- Whisper.NET (transcrição)
+- Ollama (embeddings e chat)
+- Microsoft.Extensions.AI
 
-### Por que segmentar?
+### Infraestrutura
 
-* Whisper já retorna segmentos
-* Embedding por segmento = respostas melhores
-* Evita chunking artificial depois
+- RabbitMQ
+- PostgreSQL
+- pgvector
+- Docker
 
-### Por que não salvar texto inteiro?
+### Acesso a dados
 
-* Perde contexto temporal
-* Embedding fica “genérico”
-* Não permite referência ao tempo
+- Entity Framework Core (escrita)
+- SQL + Npgsql (consulta vetorial)
 
----
+## 8. Requisitos Não Funcionais
 
-## 7️⃣ Eventos (contratos)
+- Processamento assíncrono
+- Idempotência na geração de embeddings
+- Tolerância a falhas em workers
+- Observabilidade via logs
+- Baixo acoplamento entre serviços
+- Código legível e manutenível
 
-### MediaUploadedEvent
+## 9. Premissas e Restrições
 
-* unchanged
+### Premissas
 
-### MediaTranscribedEvent
+- Modelos de IA rodam localmente
+- Banco único compartilhado
+- RabbitMQ é o backbone de eventos
 
-```json
-{
-  "mediaId": "guid",
-  "transcriptionId": "guid",
-  "segmentsCount": 42
-}
-```
+### Restrições
 
----
+- Sem UI
+- Sem orquestração complexa
+- Sem versionamento de modelos
 
-## 8️⃣ Métricas importantes (futuro)
+## 10. Estado Atual do Produto
 
-* tempo total de transcrição
-* duração média por segmento
-* tokens por segmento
-* custo por mídia
+✅ **Produto funcional**

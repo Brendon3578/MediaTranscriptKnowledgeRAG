@@ -1,26 +1,60 @@
-# 🧠 Media Transcript Knowledge RAG
+# Media Search Engine with RAG (.NET + Whisper + pgvector)
 
-Uma plataforma de backend baseada em **microserviços** e **arquitetura orientada a eventos** para ingestão, transcrição e consulta semântica (RAG) de mídias (áudio/vídeo).
+## 📌 Descrição do Projeto
 
-O sistema utiliza **IA local** (Ollama e Whisper) para garantir privacidade e reduzir custos, orquestrando todo o fluxo de processamento de forma assíncrona via RabbitMQ.
+Este projeto consiste em uma plataforma backend robusta desenvolvida em .NET para ingestão, processamento e consulta semântica de arquivos de mídia (áudio e vídeo). O sistema busca simplificar a consulta de conteúdo de vídeos e áudios, permitindo que usuários façam perguntas em linguagem natural e obtenham respostas baseadas no conteúdo falado nos vídeos, com referência temporal precisa.
 
----
+A solução utiliza uma abordagem 100% local (On-Premise) para Inteligência Artificial, empregando Whisper para transcrição e Ollama para geração de embeddings e respostas (RAG), garantindo privacidade de dados e eliminação de custos com APIs de terceiros, mas pode a arquitetura pode ser reaproveitada para a utilização de serviços de AI externos.
 
-## 🚀 Tecnologias
+## 🏗 Arquitetura da Solução
 
-* **Runtime**: [.NET 8](https://dotnet.microsoft.com/)
+O sistema foi desenhado seguindo uma **Arquitetura Orientada a Eventos (Event-Driven Architecture)**, desacoplando os processos de ingestão, processamento pesado (transcrição/embeddings) e consulta.
+
+* **APIs e Workers:** A solução é dividida em APIs (Upload e Query) para interação síncrona com o usuário e Workers (Transcription e Embedding) para processamento assíncrono em background.
+* **Mensageria:** O **RabbitMQ** atua como arcabouço de comunicação, garantindo que cada etapa do pipeline seja acionada por eventos de domínio (`MediaUploadedEvent`, `MediaTranscribedEvent`), proporcionando escalabilidade e resiliência.
+* **Persistência:** O **PostgreSQL** é utilizado como banco de dados central, utilizando a extensão **pgvector** para armazenamento e consulta eficiente de vetores de alta dimensão.
+
+## 🔄 Fluxo de Funcionamento
+
+O pipeline de processamento segue as seguintes etapas:
+
+1. **Upload:** O usuário envia um arquivo de mídia (áudio/vídeo) para a `Upload.Api`, selecionando opcionalmente o modelo de transcrição (ex: Medium, Large). O arquivo é armazenado e um evento `MediaUploadedEvent` é publicado.
+2. **Transcrição:** O `Transcription.Worker` consome o evento, extrai o áudio e utiliza o **Whisper.NET** (com modelos GGML locais) para transcrever o conteúdo. O texto é segmentado por tempo e persistido, gerando um evento `MediaTranscribedEvent`.
+3. **Embeddings:** O `Embedding.Worker` reage ao evento de transcrição, processa cada segmento de texto utilizando o **Ollama** para gerar vetores numéricos (embeddings) que representam o significado semântico do trecho.
+4. **Indexação:** Os vetores gerados são armazenados na tabela `embeddings` do PostgreSQL, prontos para busca vetorial.
+5. **Consulta (RAG):** Na `Query.Api`, a pergunta do usuário é convertida em vetor. O sistema realiza uma busca por similaridade no banco, recupera os segmentos mais relevantes e utiliza um LLM (via Ollama) para gerar uma resposta contextualizada.
+
+## 🚀 Tecnologias Utilizadas
+
+* **Linguagem Principal**: [C# .NET 8](https://dotnet.microsoft.com/)
 * **APIs & Workers**: ASP.NET Core Web API, Background Services
 * **Mensageria**: [RabbitMQ](https://www.rabbitmq.com/) (Event-Driven Architecture)
 * **Banco de Dados**: [PostgreSQL](https://www.postgresql.org/)
 * **Busca Vetorial**: [pgvector](https://github.com/pgvector/pgvector)
 * **ORM / Data Access**: Entity Framework Core & [Dapper](https://github.com/DapperLib/Dapper)
-* **IA & LLM**: [Microsoft.Extensions.AI](https://devblogs.microsoft.com/dotnet/introducing-microsoft-extensions-ai-preview/)
-* **Modelos Locais**: [Ollama](https://ollama.com/) (Llama 3, Nomic Embed)
+* **Biblioteca de IA & LLM**: [Microsoft.Extensions.AI](https://devblogs.microsoft.com/dotnet/introducing-microsoft-extensions-ai-preview/)
+* **Modelos Locais**: [Ollama](https://ollama.com/) (phi3:mini, bge-M3)
 * **Transcrição**: [Whisper.net](https://github.com/sandrohanea/whisper.net)
 * **Processamento de Mídia**: [FFmpeg](https://ffmpeg.org/)
 * **Infraestrutura**: Docker & Docker Compose
 
----
+## Modelo de Dados (Visão Geral)
+
+O banco de dados foi modelado para suportar o fluxo de RAG com rastreabilidade:
+
+* **media:** Armazena metadados dos arquivos originais (caminho, tamanho, tipo, data de upload).
+* **transcriptions:** Contém o registro da transcrição completa, incluindo métricas como modelo utilizado e tempo de processamento.
+* **transcription_segments:** Tabela central para o RAG. Armazena o texto quebrado em pequenos trechos com seus respectivos timestamps (início e fim).
+* **embeddings:** Tabela vetorial que vincula cada segmento ao seu vetor representativo (embedding), permitindo a busca semântica.
+
+## 🧠 Busca Semântica e RAG
+
+A funcionalidade de busca (Retrieval-Augmented Generation) é o coração do sistema:
+
+1. **Vetorização:** A pergunta do usuário é transformada em um vetor de embeddings usando o mesmo modelo da ingestão.
+2. **Busca Vetorial:** O PostgreSQL utiliza o operador `<=>` (distância de cosseno/euclidiana) para encontrar os segmentos de transcrição semanticamente mais próximos da pergunta.
+3. **Contexto:** Os trechos recuperados são montados em um prompt de sistema ("Contexto").
+4. **Geração:** O LLM recebe a pergunta e o contexto, gerando uma resposta natural baseada estritamente nas informações encontradas na mídia.
 
 ## 🏗️ Arquitetura
 
@@ -117,87 +151,13 @@ erDiagram
 
 ```
 
----
-
-## 📦 Microserviços
-
-### 📤 Upload.Api
-
-Ponto de entrada para ingestão de arquivos.
-
-* **Responsabilidade**: Receber arquivos de áudio/vídeo, validar formatos e persistir no disco local.
-* **Banco de Dados**: Registra metadados na tabela `media`.
-* **Output**: Publica o evento `MediaUploadedEvent` na fila.
-
-### 🎙 Transcription.Worker
-
-Processador de áudio dedicado.
-
-* **Responsabilidade**: Consumir eventos de upload, extrair áudio de vídeos (via FFmpeg) e realizar transcrição.
-* **Core**: Utiliza **Whisper local** para transcrição de alta precisão.
-* **Diferencial**: Gera transcrições **segmentadas por tempo** (timestamps de início/fim), essenciais para RAG preciso.
-* **Output**: Salva segmentos na tabela `transcription_segments` e publica `MediaTranscribedEvent`.
-
-### 🧠 Embedding.Worker
-
-Gerador de vetores semânticos.
-
-* **Responsabilidade**: Transformar texto em representações vetoriais (embeddings).
-* **Processo**: Consome eventos de transcrição e processa cada segmento individualmente.
-* **IA**: Utiliza modelos de embedding locais via Ollama (ex: `nomic-embed-text`).
-* **Output**: Persiste vetores na tabela `embeddings` (coluna `vector`).
-
-### 🔍 Query.Api (RAG)
-
-Interface de consulta inteligente.
-
-* **Responsabilidade**: Responder perguntas do usuário com base no conteúdo das mídias.
-* **Pipeline RAG**:
-    1. Gera embedding da pergunta.
-    2. Realiza busca por similaridade (cosine distance) no PostgreSQL via **Dapper**.
-    3. Recupera os segmentos mais relevantes com seus timestamps.
-    4. Monta o contexto e solicita a resposta ao LLM (Llama 3).
-
----
-
-## 🗃️ Modelo de Dados
-
-O banco de dados PostgreSQL é estruturado para suportar busca híbrida e vetorial.
-
-* **`media`**: Metadados do arquivo (nome, caminho, duração).
-* **`transcriptions`**: Cabeçalho da transcrição (modelo usado, idioma).
-* **`transcription_segments`**: O coração do RAG. Contém o texto segmentado com `start_seconds` e `end_seconds`.
-* **`embeddings`**: Armazena os vetores gerados para cada segmento. Utiliza a extensão `pgvector` para indexação (IVFFlat) e busca eficiente.
-
----
-
-## 🔍 Consulta Semântica (RAG)
-
-A API de consulta implementa o padrão **Retrieval-Augmented Generation**:
-
-1. **Vetorização**: A pergunta do usuário ("O que foi dito sobre arquitetura?") é convertida em um vetor numérico pelo mesmo modelo usado na indexação.
-2. **Busca Vetorial**: Uma query SQL (via Dapper) busca os segmentos mais próximos semanticamente:
-
-    ```sql
-    SELECT text, start_seconds 
-    FROM embeddings 
-    ORDER BY embedding <=> @queryVector 
-    LIMIT 5
-    ```
-
-3. **Contextualização**: O sistema monta um prompt com os trechos encontrados:
-    > *[00:10 - 00:25] A arquitetura orientada a eventos permite desacoplamento...*
-4. **Geração**: O LLM recebe o prompt e gera uma resposta fundamentada apenas no contexto fornecido.
-
----
-
-## ⚙️ Como Executar
+## 🛠 Como Executar o Projeto
 
 ### Pré-requisitos
 
-* [Docker](https://www.docker.com/) e Docker Compose instalados.
-* [Ollama](https://ollama.com/) rodando localmente (ou configurável no docker).
-* Modelos Ollama baixados: `ollama pull llama3` e `ollama pull nomic-embed-text`.
+* Docker e Docker Compose instalados.
+* .NET 10 SDK (para desenvolvimento/build local).
+* Ollama rodando localmente (ou configurável via Docker) com os modelos necessários (ex: `llama3`, `nomic-embed-text`).
 
 ### Passo a Passo
 
@@ -228,6 +188,8 @@ A API de consulta implementa o padrão **Retrieval-Augmented Generation**:
 
 ---
 
+> **Nota:** Na primeira execução, o `Transcription.Worker` pode levar alguns instantes para baixar o modelo Whisper selecionado (se ainda não estiver em cache).
+
 ## 📈 Status e Evolução
 
 ### ✅ Funcionalidades Atuais
@@ -237,6 +199,8 @@ A API de consulta implementa o padrão **Retrieval-Augmented Generation**:
 * [x] Segmentação temporal precisa.
 * [x] Geração de Embeddings assíncrona.
 * [x] Busca Semântica (RAG) funcional.
+* [x] Comunicação com RabbitMQ
+* [x] Arquitetura orientada a eventos  
 
 ### 🚀 Próximos Passos (Roadmap)
 

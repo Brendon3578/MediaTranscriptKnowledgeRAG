@@ -2,6 +2,7 @@ using MediaEmbedding.Worker.Application.Interfaces;
 using MediaEmbedding.Worker.Application.UseCases;
 using MediaEmbedding.Worker.Domain.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Pgvector;
 using Shared.Contracts.Events;
 
@@ -10,21 +11,25 @@ namespace MediaEmbedding.Worker
     public class MediaTranscribedConsumer
     {
         private readonly IEmbeddingService _embeddingService;
+        private readonly IEventPublisher _eventPublisher;
         private readonly ILogger<MediaTranscribedConsumer> _logger;
         private readonly GenerateEmbeddingUseCase _embeddingDataService;
         private readonly string _modelName;
-
+        private readonly string _publishRoutingKey;
 
         public MediaTranscribedConsumer(
             GenerateEmbeddingUseCase embeddingDataService,
-            IEmbeddingService embeddingService, 
+            IEmbeddingService embeddingService,
+            IEventPublisher eventPublisher,
             IConfiguration configuration,
             ILogger<MediaTranscribedConsumer> logger)
         {
             _embeddingDataService = embeddingDataService;
             _embeddingService = embeddingService;
+            _eventPublisher = eventPublisher;
             _logger = logger;
             _modelName = configuration["Embedding:Model"] ?? "nomic-embed-text";
+            _publishRoutingKey = configuration["RabbitMq:PublishRoutingKey"] ?? "media.embedded";
         }
 
         public async Task GenerateTranscriptionEmbeddingAsync(MediaTranscribedEvent @event, CancellationToken ct)
@@ -81,17 +86,35 @@ namespace MediaEmbedding.Worker
                 if (processedCount > 0)
                 {
                     await _embeddingDataService.SaveEmbeddingsAsync();
+
+                    await PublishMediaEmbeddedEventAsync(@event.MediaId, _modelName, segments.Count);
+
+                    _logger.LogInformation(
+                        "MediaEmbedded publicado - MediaId: {MediaId}, Chunks: {ChunksCount}, Model: {ModelName}",
+                        @event.MediaId, segments.Count, _modelName);
                 }
 
-                _logger.LogInformation("Processamento concluído para MediaId: {MediaId}. Gerados: {Processed}, Pulados: {Skipped}", 
+                _logger.LogInformation("Processamento concluído para MediaId: {MediaId}. Gerados: {Processed}, Pulados: {Skipped}",
                     @event.MediaId, processedCount, skippedCount);
-
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao processar embeddings para MediaId: {MediaId}", @event.MediaId);
                 throw; // Re-throw para o RabbitMQ fazer Nack/Retry
             }
+        }
+
+        public async Task PublishMediaEmbeddedEventAsync(Guid mediaId, string modelName, int chunksCount)
+        {
+            var embeddedEvent = new MediaEmbeddedEvent
+            {
+                MediaId = mediaId,
+                ModelName = modelName,
+                ChunksCount = chunksCount,
+                EmbeddedAt = DateTime.UtcNow
+            };
+
+            await _eventPublisher.PublishAsync(embeddedEvent, _publishRoutingKey, ct);
         }
     }
 }

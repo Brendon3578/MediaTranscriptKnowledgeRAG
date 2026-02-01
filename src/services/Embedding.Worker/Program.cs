@@ -1,15 +1,24 @@
 using MediaEmbedding.Worker;
 using MediaEmbedding.Worker.Application.Interfaces;
 using MediaEmbedding.Worker.Application.UseCases;
+using MediaEmbedding.Worker.Configuration;
 using MediaEmbedding.Worker.Infrastructure.AI;
+using MediaEmbedding.Worker.Infrastructure.Messaging;
 using MediaEmbedding.Worker.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Configuration
-// Removed Options configuration
+// RabbitMQ
+builder.Services.AddOptions<RabbitMqOptions>()
+    .Bind(builder.Configuration.GetSection("RabbitMq"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<RabbitMqEventPublisher>();
+builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqEventPublisher>());
+builder.Services.AddHostedService<RabbitMqPublisherHostedService>();
 
 // Database
 var connectionString = builder.Configuration.GetConnectionString("Postgres");
