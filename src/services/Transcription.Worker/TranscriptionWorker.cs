@@ -1,4 +1,3 @@
-
 using FFMpegCore;
 using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Configuration;
@@ -7,43 +6,32 @@ using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using Shared.Contracts.Events;
-using System.Runtime;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
 
 namespace MediaTranscription.Worker;
 
 public class TranscriptionWorker : BackgroundService
 {
-    private readonly IConfiguration _configuration;
     private readonly ILogger<TranscriptionWorker> _logger;
     private readonly ITranscriptionFacade _transcriptionFacade;
+    private readonly IEventPublisher _eventPublisher;
+    private readonly RabbitMqOptions _rabbitMqOptions;
+    private readonly IServiceScopeFactory _scopeFactory;
     private IConnection? _connection;
     private IChannel? _channel;
     private string? _consumerTag;
 
-    private readonly IServiceScopeFactory _scopeFactory;
-
-    private readonly RabbitMqOptions _rabbitMqOptions;
-
-    private readonly JsonSerializerOptions _jsonSerializerOptions = new()
-    {
-        WriteIndented = false
-    };
-
-
     public TranscriptionWorker(
-        IConfiguration configuration,
         ILogger<TranscriptionWorker> logger,
         ITranscriptionFacade transcriptionFacade,
+        IEventPublisher eventPublisher,
         IServiceScopeFactory scopeFactory,
-        IOptions<RabbitMqOptions> rabbitMqOptions
-        )
+        IOptions<RabbitMqOptions> rabbitMqOptions)
     {
-        _configuration = configuration;
         _logger = logger;
         _transcriptionFacade = transcriptionFacade;
+        _eventPublisher = eventPublisher;
         _scopeFactory = scopeFactory;
         _rabbitMqOptions = rabbitMqOptions.Value;
     }
@@ -160,54 +148,13 @@ public class TranscriptionWorker : BackgroundService
                 TranscribedAt = DateTime.UtcNow
             };
 
-            await PublishMediaTranscribedEventAsync(transcribedEvent, _rabbitMqOptions.PublishRoutingKey, ct);
+            await _eventPublisher.PublishAsync(transcribedEvent, _rabbitMqOptions.PublishRoutingKey, ct);
+            _logger.LogInformation("Evento MediaTranscribed publicado para MediaId: {MediaId}", transcribedEvent.MediaId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro no fluxo de transcrição da MediaId: {MediaId}", mediaEvent.MediaId);
             throw; // Repassa erro para lógica de retry (Nack)
-        }
-    }
-
-    public async Task PublishMediaTranscribedEventAsync(MediaTranscribedEvent @event, string routingKey, CancellationToken ct = default)
-    {
-        if (_channel == null)
-            throw new InvalidOperationException("RabbitMQ channel is not initialized. Call ConnectAsync first.");
-
-        try
-        {
-            var json = JsonSerializer.Serialize(@event, _jsonSerializerOptions);
-
-            var rawBody = Encoding.UTF8.GetBytes(json);
-
-            var properties = new BasicProperties()
-            {
-                ContentType = "application/json",
-                MessageId = @event.TranscriptionId.ToString(),
-                CorrelationId = @event.MediaId.ToString(),
-                Persistent = true,
-                Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds()),
-                Type = typeof(MediaTranscribedEvent).Name
-            };
-
-            await _channel.BasicPublishAsync(
-                exchange: _rabbitMqOptions.ExchangeName,
-                routingKey: routingKey,
-                body: rawBody,
-                cancellationToken: ct,
-                mandatory: false, // TODO: validar isso depois
-                basicProperties: properties
-            );
-            _logger.LogInformation("Evento MediaTranscribed publicado para MediaId: {MediaId}", @event.MediaId);
-
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "Erro ao publicar evento - Type: {EventType}, RoutingKey: {RoutingKey}",
-                typeof(MediaTranscribedEvent).Name, routingKey
-            );
-            throw;
         }
     }
 

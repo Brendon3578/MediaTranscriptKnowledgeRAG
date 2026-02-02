@@ -1,11 +1,11 @@
-using MediaEmbedding.Worker.Application.Interfaces;
-using MediaEmbedding.Worker.Configuration;
+using MediaTranscription.Worker.Application.Interfaces;
+using MediaTranscription.Worker.Configuration;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using System.Text;
 using System.Text.Json;
 
-namespace MediaEmbedding.Worker.Infrastructure.Messaging
+namespace MediaTranscription.Worker.Infrastructure.Messaging
 {
     public class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
     {
@@ -79,7 +79,7 @@ namespace MediaEmbedding.Worker.Infrastructure.Messaging
                     routingKey: routingKey,
                     body: rawBody,
                     cancellationToken: ct,
-                    mandatory: false, // aqui por enquanto depois de ser feito o publish do evento mediaEmbedded não precisa do mandatory true, pode mandar mesmo que não haja um exchange para o evento
+                    mandatory: true,
                     basicProperties: properties);
             }
             catch (Exception ex)

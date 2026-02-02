@@ -3,7 +3,7 @@ using Upload.Api.Application;
 using Upload.Api.Application.Interfaces;
 using Upload.Api.Configuration;
 using Upload.Api.Infrastructure.FileSystem;
-using Upload.Api.Infrastructure.Menssaging;
+using Upload.Api.Infrastructure.Messaging;
 using Upload.Api.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);

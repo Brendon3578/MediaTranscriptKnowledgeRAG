@@ -1,8 +1,10 @@
 using MediaEmbedding.Worker.Application.Interfaces;
 using MediaEmbedding.Worker.Application.UseCases;
+using MediaEmbedding.Worker.Configuration;
 using MediaEmbedding.Worker.Domain.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Pgvector;
 using Shared.Contracts.Events;
 
@@ -21,6 +23,7 @@ namespace MediaEmbedding.Worker
             GenerateEmbeddingUseCase embeddingDataService,
             IEmbeddingService embeddingService,
             IEventPublisher eventPublisher,
+            IOptions<RabbitMqOptions> rabbitMqOptions,
             IConfiguration configuration,
             ILogger<MediaTranscribedConsumer> logger)
         {
@@ -29,7 +32,7 @@ namespace MediaEmbedding.Worker
             _eventPublisher = eventPublisher;
             _logger = logger;
             _modelName = configuration["Embedding:Model"] ?? "nomic-embed-text";
-            _publishRoutingKey = configuration["RabbitMq:PublishRoutingKey"] ?? "media.embedded";
+            _publishRoutingKey = rabbitMqOptions.Value.PublishRoutingKey;
         }
 
         public async Task GenerateTranscriptionEmbeddingAsync(MediaTranscribedEvent @event, CancellationToken ct)
@@ -87,7 +90,7 @@ namespace MediaEmbedding.Worker
                 {
                     await _embeddingDataService.SaveEmbeddingsAsync();
 
-                    await PublishMediaEmbeddedEventAsync(@event.MediaId, _modelName, segments.Count);
+                    await PublishMediaEmbeddedEventAsync(@event.MediaId, _modelName, segments.Count, ct);
 
                     _logger.LogInformation(
                         "MediaEmbedded publicado - MediaId: {MediaId}, Chunks: {ChunksCount}, Model: {ModelName}",
@@ -104,7 +107,7 @@ namespace MediaEmbedding.Worker
             }
         }
 
-        public async Task PublishMediaEmbeddedEventAsync(Guid mediaId, string modelName, int chunksCount)
+        private async Task PublishMediaEmbeddedEventAsync(Guid mediaId, string modelName, int chunksCount, CancellationToken ct)
         {
             var embeddedEvent = new MediaEmbeddedEvent
             {

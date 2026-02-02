@@ -1,19 +1,16 @@
-﻿
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using Upload.Api.Application.Interfaces;
 using Upload.Api.Configuration;
 
-namespace Upload.Api.Infrastructure.Menssaging
+namespace Upload.Api.Infrastructure.Messaging
 {
     public class RabbitMqEventPublisher : IEventPublisher, IAsyncDisposable
     {
         private readonly ILogger<RabbitMqEventPublisher> _logger;
-        private IChannel? _channel; // antes era IModel
+        private IChannel? _channel;
         private IConnection? _connection;
         private readonly RabbitMqOptions _rabbitMqOptions;
 
@@ -29,7 +26,6 @@ namespace Upload.Api.Infrastructure.Menssaging
             _logger = logger;
         }
 
-        // chamar no program.cs ou startup.cs
         public async Task ConnectAsync(CancellationToken ct)
         {
             var factory = new ConnectionFactory
@@ -45,7 +41,7 @@ namespace Upload.Api.Infrastructure.Menssaging
 
             await _channel.ExchangeDeclareAsync(
                 exchange: _rabbitMqOptions.ExchangeName,
-                type: _rabbitMqOptions.ExchangeType, // topic
+                type: _rabbitMqOptions.ExchangeType,
                 durable: true,
                 autoDelete: false,
                 cancellationToken: ct
@@ -53,13 +49,12 @@ namespace Upload.Api.Infrastructure.Menssaging
 
             _channel.BasicReturnAsync += async (_, args) =>
             {
-
-                var message = Encoding.UTF8.GetString(args.Body.ToArray());
+                var eventType = args.BasicProperties?.Type ?? "unknown";
                 _logger.LogError(
-                   "Mensagem NÃO roteada pelo RabbitMQ | Exchange={Exchange} | RoutingKey={RoutingKey}",
-                   args.Exchange,
-                   args.RoutingKey
-               );
+                    "Unroutable message returned by RabbitMQ | Exchange={Exchange} | RoutingKey={RoutingKey} | EventType={EventType}",
+                    args.Exchange,
+                    args.RoutingKey,
+                    eventType);
             };
 
             _logger.LogInformation(
@@ -93,16 +88,17 @@ namespace Upload.Api.Infrastructure.Menssaging
                     routingKey: routingKey,
                     body: rawBody,
                     cancellationToken: ct,
-                    mandatory: true, // TODO: validar isso depois
+                    mandatory: true,
                     basicProperties: properties
                 );
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex,
-                    "Erro ao publicar evento - Type: {EventType}, RoutingKey: {RoutingKey}",
-                    typeof(T).Name, routingKey
-                );
+                    "Failed to publish event | Exchange={Exchange} | RoutingKey={RoutingKey} | EventType={EventType}",
+                    _rabbitMqOptions.ExchangeName,
+                    routingKey,
+                    typeof(T).Name);
                 throw;
             }
         }

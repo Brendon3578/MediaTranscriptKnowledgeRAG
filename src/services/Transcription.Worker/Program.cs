@@ -4,6 +4,7 @@ using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Configuration;
 using MediaTranscription.Worker.Infrastructure;
 using MediaTranscription.Worker.Infrastructure.Interfaces;
+using MediaTranscription.Worker.Infrastructure.Messaging;
 using MediaTranscription.Worker.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,22 +14,23 @@ builder.Services.AddSingleton<IAudioExtractorService, AudioExtractorService>();
 builder.Services.AddSingleton<IWhisperModelProvider, WhisperAIModelProvider>();
 builder.Services.AddSingleton<IDependencyBootstrapper, WhisperAndFfmpegBootstrapper>();
 builder.Services.AddSingleton<ITranscriptionFacade, WhisperNetTranscriptionFacade>();
+
+builder.Services.AddSingleton<RabbitMqEventPublisher>();
+builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqEventPublisher>());
+builder.Services.AddHostedService<RabbitMqPublisherHostedService>();
 builder.Services.AddHostedService<TranscriptionWorker>();
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<TranscriptionDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-//services
 builder.Services.AddScoped<TranscriptionRepository>();
 
 // Messaging - RabbitMQ
 builder.Services.AddOptions<RabbitMqOptions>()
-    .Bind(builder.Configuration.GetSection("RabbitMq")) // Bind the "RabbitMq" section
-    .ValidateDataAnnotations() // Enable validation using data annotations
-    .ValidateOnStart();       // Enforce validation at application startup
-
-// other options removed - using IConfiguration directly
+    .Bind(builder.Configuration.GetSection("RabbitMq"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
 var host = builder.Build();
 
