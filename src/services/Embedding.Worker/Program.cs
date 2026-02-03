@@ -28,7 +28,11 @@ builder.Services.AddDbContext<EmbeddingDbContext>(options =>
 });
 
 // AI / Embeddings
-var ollamaUrl = builder.Configuration["Embedding:BaseUrl"] ?? "http://localhost:11434";
+var ollamaUrl = builder.Configuration["Ollama:BaseUrl"]
+                ?? builder.Configuration["Embedding:BaseUrl"]
+                ?? "http://localhost:11434";
+
+
 var ollamaModel = builder.Configuration["Embedding:Model"] ?? "nomic-embed-text";
 
 // Register Ollama Embedding Generator
@@ -37,6 +41,7 @@ builder.Services.AddEmbeddingGenerator<string, Embedding<float>>(b =>
 
 // Services
 builder.Services.AddScoped<IEmbeddingService, OllamaEmbeddingService>();
+builder.Services.AddHttpClient<IOllamaHealthCheckService, OllamaHealthCheckService>();
 builder.Services.AddScoped<MediaTranscribedConsumer>();
 builder.Services.AddScoped<GenerateEmbeddingUseCase>();
 
@@ -44,4 +49,12 @@ builder.Services.AddScoped<GenerateEmbeddingUseCase>();
 builder.Services.AddHostedService<EmbeddingWorker>();
 
 var host = builder.Build();
-host.Run();
+
+// Ensure Ollama is reachable before starting the worker.
+using (var scope = host.Services.CreateScope())
+{
+    var healthCheck = scope.ServiceProvider.GetRequiredService<IOllamaHealthCheckService>();
+    await healthCheck.CheckAvailabilityAsync(CancellationToken.None);
+}
+
+await host.RunAsync();

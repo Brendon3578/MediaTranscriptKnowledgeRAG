@@ -12,14 +12,16 @@ builder.Services.AddSwaggerGen();
 
 
 // AI Configuration
-var embeddingBaseUrl = builder.Configuration["Embedding:BaseUrl"] ?? "http://localhost:11434";
+var ollamaBaseUrl = builder.Configuration["Ollama:BaseUrl"] ?? "http://localhost:11434";
+
+var embeddingBaseUrl = builder.Configuration["Embedding:BaseUrl"] ?? ollamaBaseUrl;
 var embeddingModel = builder.Configuration["Embedding:Model"] ?? "bge-m3";
 
 // Register Embedding Generator
 builder.Services.AddEmbeddingGenerator<string, Embedding<float>>(b =>
     b.Use(new OllamaEmbeddingGenerator(new Uri(embeddingBaseUrl), embeddingModel)));
 
-var chatBaseUrl = builder.Configuration["Chat:BaseUrl"] ?? "http://localhost:11434";
+var chatBaseUrl = builder.Configuration["Chat:BaseUrl"] ?? ollamaBaseUrl;
 var chatModel = builder.Configuration["Chat:Model"] ?? "phi3:mini";
 
 // Register Chat Client
@@ -33,8 +35,16 @@ builder.Services.AddScoped<TranscriptionSegmentVectorSearchRepository>();
 builder.Services.AddScoped<EmbeddingGeneratorService>();
 builder.Services.AddScoped<GenerateAnswerUseCase>();
 builder.Services.AddScoped<RagFacade>();
+builder.Services.AddHttpClient<IOllamaHealthCheckService, OllamaHealthCheckService>();
 
 var app = builder.Build();
+
+// Ensure Ollama is reachable before serving requests.
+using (var scope = app.Services.CreateScope())
+{
+    var healthCheck = scope.ServiceProvider.GetRequiredService<IOllamaHealthCheckService>();
+    await healthCheck.CheckAvailabilityAsync(CancellationToken.None);
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -49,4 +59,4 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
-app.Run();
+await app.RunAsync();

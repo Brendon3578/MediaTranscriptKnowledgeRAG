@@ -183,8 +183,8 @@ erDiagram
     ```
 
 4. **Acesse o Swagger**
-    * Upload API: `http://localhost:5000/swagger`
-    * Query API: `http://localhost:5200/swagger`
+    * Upload API: `https://localhost:7290/swagger`
+    * Query API: `https://localhost:7032/swagger`
 
 ---
 

@@ -82,7 +82,7 @@ namespace Upload.Api.Application
             return Ok(uploadMediaDto);
         }
 
-        [HttpGet]
+        [HttpGet("GetAllMedia")]
         public async Task<IActionResult> GetAllMedia(CancellationToken ct)
         {
             try
