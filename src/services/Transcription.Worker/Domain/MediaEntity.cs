@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace MediaTranscription.Worker.Domain
 {
@@ -30,6 +30,15 @@ namespace MediaTranscription.Worker.Domain
 
         [Column("file_size_bytes")]
         public long FileSizeBytes { get; set; }
+
+        [Column("duration_seconds")]
+        public float? DurationSeconds { get; set; }
+
+        [Column("audio_codec")]
+        public string? AudioCodec { get; set; }
+
+        [Column("sample_rate")]
+        public int? SampleRate { get; set; }
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

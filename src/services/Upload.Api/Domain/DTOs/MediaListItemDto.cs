@@ -7,6 +7,7 @@ namespace Upload.Api.Domain.DTOs
         public string ContentType { get; set; } = string.Empty;
         public long FileSizeBytes { get; set; }
         public string Status { get; set; } = string.Empty;
+        public float? DurationSeconds { get; set; }
         public DateTime CreatedAt { get; set; }
     }
 }

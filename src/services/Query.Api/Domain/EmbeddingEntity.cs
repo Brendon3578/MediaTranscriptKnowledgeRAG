@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using Pgvector;
 
 namespace Query.Api.Domain
 {
+    [Table("embeddings")]
     public class EmbeddingEntity
     {
         [Column("id")]
@@ -13,11 +15,17 @@ namespace Query.Api.Domain
         [Column("transcription_id")]
         public Guid TranscriptionId { get; set; }
 
+        [Column("transcription_segment_id")]
+        public Guid TranscriptionSegmentId { get; set; }
+
+        [Column("model_name")]
+        public string ModelName { get; set; } = null!;
+
         [Column("chunk_text")]
         public string ChunkText { get; set; } = null!;
 
-        [Column("embedding")]
-        public float[] EmbeddingVector { get; set; } = Array.Empty<float>();
+        [Column("embedding", TypeName = "vector(1024)")]
+        public Vector? EmbeddingVector { get; set; }
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }

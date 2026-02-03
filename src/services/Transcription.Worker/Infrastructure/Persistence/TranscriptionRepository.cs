@@ -23,6 +23,20 @@ namespace MediaTranscription.Worker.Infrastructure.Persistence
             await _db.SaveChangesAsync(cancellationToken);
         }
 
+        public async Task UpdateMediaMetadataAsync(Guid mediaId, double? durationSeconds, string? audioCodec, int? sampleRate, CancellationToken cancellationToken)
+        {
+            var media = await _db.Media.FindAsync(new object[] { mediaId }, cancellationToken);
+            if (media != null)
+            {
+                media.DurationSeconds = (float?)durationSeconds;
+                media.AudioCodec = audioCodec;
+                media.SampleRate = sampleRate;
+                media.UpdatedAt = DateTime.UtcNow;
+
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         public async Task<Guid> SaveTranscriptionAndSegments(TranscriptionResultDto resultDto, MediaUploadedEvent mediaEvent, CancellationToken cancellationToken)
         {
             var transcriptionId = Guid.NewGuid();

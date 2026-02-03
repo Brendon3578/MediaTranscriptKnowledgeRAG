@@ -125,6 +125,7 @@ namespace Upload.Api.Application
                     ContentType = m.ContentType,
                     FileSizeBytes = m.FileSizeBytes,
                     Status = m.Status.ToString(),
+                    DurationSeconds = m.DurationSeconds,
                     CreatedAt = m.CreatedAt
                 })
                 .ToListAsync(ct);

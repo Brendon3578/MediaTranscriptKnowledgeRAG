@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Services.AddSingleton<IAudioExtractorService, AudioExtractorService>();
+builder.Services.AddSingleton<IMediaMetadataExtractor, MediaMetadataExtractor>();
 builder.Services.AddSingleton<IWhisperModelProvider, WhisperAIModelProvider>();
 builder.Services.AddSingleton<IDependencyBootstrapper, WhisperAndFfmpegBootstrapper>();
 builder.Services.AddSingleton<ITranscriptionFacade, WhisperNetTranscriptionFacade>();

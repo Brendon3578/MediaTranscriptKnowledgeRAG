@@ -1,6 +1,7 @@
 using FFMpegCore;
 using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Configuration;
+using MediaTranscription.Worker.Infrastructure.Interfaces;
 using MediaTranscription.Worker.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
@@ -15,6 +16,7 @@ public class TranscriptionWorker : BackgroundService
 {
     private readonly ILogger<TranscriptionWorker> _logger;
     private readonly ITranscriptionFacade _transcriptionFacade;
+    private readonly IMediaMetadataExtractor _metadataExtractor;
     private readonly IEventPublisher _eventPublisher;
     private readonly RabbitMqOptions _rabbitMqOptions;
     private readonly IServiceScopeFactory _scopeFactory;
@@ -25,12 +27,14 @@ public class TranscriptionWorker : BackgroundService
     public TranscriptionWorker(
         ILogger<TranscriptionWorker> logger,
         ITranscriptionFacade transcriptionFacade,
+        IMediaMetadataExtractor metadataExtractor,
         IEventPublisher eventPublisher,
         IServiceScopeFactory scopeFactory,
         IOptions<RabbitMqOptions> rabbitMqOptions)
     {
         _logger = logger;
         _transcriptionFacade = transcriptionFacade;
+        _metadataExtractor = metadataExtractor;
         _eventPublisher = eventPublisher;
         _scopeFactory = scopeFactory;
         _rabbitMqOptions = rabbitMqOptions.Value;
@@ -124,6 +128,19 @@ public class TranscriptionWorker : BackgroundService
         try
         {
             var startTime = DateTime.UtcNow;
+
+            // 0. Extrair e persistir metadados (FFprobe)
+            var metadata = await _metadataExtractor.ExtractMetadataAsync(mediaEvent.FilePath, ct);
+            if (metadata != null)
+            {
+                await transcriptionDataService.UpdateMediaMetadataAsync(
+                    mediaEvent.MediaId,
+                    metadata.DurationSeconds,
+                    metadata.AudioCodec,
+                    metadata.SampleRate,
+                    ct);
+                _logger.LogInformation("Metadata persisted for MediaId: {MediaId}. Duration: {Duration}s", mediaEvent.MediaId, metadata.DurationSeconds);
+            }
 
             // 1. Transcrever usando o Facade (Passando o modelo do evento)
             var result = await _transcriptionFacade.TranscribeAsync(mediaEvent.FilePath, mediaEvent.ContentType, mediaEvent.TranscriptionModel, ct);

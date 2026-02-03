@@ -20,16 +20,20 @@ namespace MediaTranscription.Worker.Infrastructure.Persistence
                 e.HasKey(e => e.Id);
 
                 e.Property(e => e.FileName)
-                    .IsRequired()
+                    .IsRequired();
 
                 e.Property(e => e.FilePath)
-                    .IsRequired()
+                    .IsRequired();
 
                 e.Property(e => e.ContentType)
-                    .IsRequired()
+                    .IsRequired();
 
                 e.Property(e => e.Status)
                     .HasConversion<int>();
+
+                e.Property(e => e.DurationSeconds);
+                e.Property(e => e.AudioCodec);
+                e.Property(e => e.SampleRate);
 
                 e.HasIndex(e => e.CreatedAt);
                 e.HasIndex(e => e.Status);

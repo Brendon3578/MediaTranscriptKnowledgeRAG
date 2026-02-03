@@ -11,6 +11,9 @@ CREATE TABLE media (
     content_type VARCHAR(100) NOT NULL,
     status INTEGER NOT NULL DEFAULT 0,
     file_size_bytes BIGINT NOT NULL DEFAULT 0,
+    duration_seconds REAL,
+    audio_codec VARCHAR(50),
+    sample_rate INT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
