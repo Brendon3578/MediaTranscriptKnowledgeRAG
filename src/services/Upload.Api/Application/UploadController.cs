@@ -81,6 +81,21 @@ namespace Upload.Api.Application
 
             return Ok(uploadMediaDto);
         }
+
+        [HttpGet]
+        public async Task<IActionResult> GetAllMedia(CancellationToken ct)
+        {
+            try
+            {
+                var list = await _uploadService.GetAllMediaAsync(ct);
+                return Ok(list);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao listar mídias");
+                return StatusCode(500, new { error = "Erro ao listar mídias" });
+            }
+        }
     }
 
 }

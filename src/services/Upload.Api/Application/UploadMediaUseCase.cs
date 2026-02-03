@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Shared.Contracts.Events;
 using Upload.Api.Application.Interfaces;
 using Upload.Api.Domain;
@@ -111,6 +112,24 @@ namespace Upload.Api.Application
                  UploadedAt = media.CreatedAt,
                  UpdatedAt = media.UpdatedAt
              };
+        }
+
+        public async Task<IReadOnlyList<MediaListItemDto>> GetAllMediaAsync(CancellationToken ct)
+        {
+            var list = await _context.Media
+                .OrderByDescending(m => m.CreatedAt)
+                .Select(m => new MediaListItemDto
+                {
+                    Id = m.Id,
+                    FileName = m.FileName,
+                    ContentType = m.ContentType,
+                    FileSizeBytes = m.FileSizeBytes,
+                    Status = m.Status.ToString(),
+                    CreatedAt = m.CreatedAt
+                })
+                .ToListAsync(ct);
+
+            return list;
         }
     }
 }
