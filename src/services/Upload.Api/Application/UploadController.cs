@@ -98,7 +98,7 @@ namespace Upload.Api.Application
         }
 
         [HttpGet("transcribed")]
-        public async Task<IActionResult> GetTranscribedMedia([FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
+        public async Task<ActionResult<PagedResponseDto<TranscribedMediaDto>>> GetTranscribedMedia([FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
         {
             try
             {
