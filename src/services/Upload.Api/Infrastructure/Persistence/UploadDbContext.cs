@@ -19,15 +19,12 @@ namespace Upload.Api.Infrastructure.Persistence
 
                 e.Property(e => e.FileName)
                     .IsRequired()
-                    .HasMaxLength(500);
 
                 e.Property(e => e.FilePath)
                     .IsRequired()
-                    .HasMaxLength(1000);
 
                 e.Property(e => e.ContentType)
                     .IsRequired()
-                    .HasMaxLength(100);
 
                 e.Property(e => e.Status)
                     .HasConversion<int>();

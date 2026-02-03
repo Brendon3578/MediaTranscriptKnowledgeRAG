@@ -17,8 +17,9 @@ namespace Query.Api.Infrastructure.Persistence
             {
                 e.ToTable("embeddings");
                 e.HasKey(x => x.Id);
-                e.Property(x => x.EmbeddingVector)
-                 .HasColumnType("vector(1536)");
+                e.Property(x => x.ChunkText).IsRequired();
+                e.Property(x => x.ModelName).IsRequired();
+                e.Property(x => x.EmbeddingVector);
                 e.Property(x => x.CreatedAt);
             });
         }
