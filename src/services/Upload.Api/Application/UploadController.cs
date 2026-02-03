@@ -96,6 +96,20 @@ namespace Upload.Api.Application
                 return StatusCode(500, new { error = "Erro ao listar mídias" });
             }
         }
-    }
 
+        [HttpGet("transcribed")]
+        public async Task<IActionResult> GetTranscribedMedia([FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
+        {
+            try
+            {
+                var result = await _uploadService.GetTranscribedMediaAsync(page, pageSize, ct);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao listar mídias transcritas");
+                return StatusCode(500, new { error = "Erro ao listar mídias transcritas" });
+            }
+        }
+    }
 }

@@ -132,5 +132,41 @@ namespace Upload.Api.Application
 
             return list;
         }
+
+        public async Task<PagedResponseDto<TranscribedMediaDto>> GetTranscribedMediaAsync(int page, int pageSize, CancellationToken ct)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1) pageSize = 10;
+
+            var query = _context.Media
+                .AsNoTracking()
+                .Where(m => m.Transcriptions.Any());
+
+            var total = await query.CountAsync(ct);
+
+            var items = await query
+                .OrderByDescending(m => m.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(m => new TranscribedMediaDto
+                {
+                    MediaId = m.Id,
+                    FileName = m.FileName,
+                    MediaType = m.ContentType,
+                    Duration = m.DurationSeconds != null ? (int) m.DurationSeconds : 0,
+                    Status = m.Status.ToString(),
+                    TranscriptionText = m.Transcriptions.FirstOrDefault()!.Text,
+                    CreatedAt = m.CreatedAt
+                })
+                .ToListAsync(ct);
+
+            return new PagedResponseDto<TranscribedMediaDto>
+            {
+                Page = page,
+                PageSize = pageSize,
+                Total = total,
+                Items = items
+            };
+        }
     }
 }

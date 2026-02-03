@@ -9,6 +9,7 @@ namespace Upload.Api.Infrastructure.Persistence
             : base(options) { }
 
         public DbSet<MediaEntity> Media => Set<MediaEntity>();
+        public DbSet<TranscriptionEntity> Transcriptions => Set<TranscriptionEntity>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -35,6 +36,19 @@ namespace Upload.Api.Infrastructure.Persistence
 
                 e.HasIndex(e => e.CreatedAt);
                 e.HasIndex(e => e.Status);
+
+                e.HasMany(m => m.Transcriptions)
+                    .WithOne(t => t.Media)
+                    .HasForeignKey(t => t.MediaId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<TranscriptionEntity>(e =>
+            {
+                e.ToTable("transcriptions");
+                e.HasKey(e => e.Id);
+                
+                e.Property(e => e.Text).IsRequired();
             });
         }
     }
