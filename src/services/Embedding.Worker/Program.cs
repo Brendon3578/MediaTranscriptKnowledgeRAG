@@ -44,6 +44,7 @@ builder.Services.AddScoped<IEmbeddingService, OllamaEmbeddingService>();
 builder.Services.AddHttpClient<IOllamaHealthCheckService, OllamaHealthCheckService>();
 builder.Services.AddScoped<MediaTranscribedConsumer>();
 builder.Services.AddScoped<GenerateEmbeddingUseCase>();
+builder.Services.AddScoped<IMediaStatusUpdater, MediaStatusUpdater>();
 
 // Hosted Service (RabbitMQ Listener)
 builder.Services.AddHostedService<EmbeddingWorker>();

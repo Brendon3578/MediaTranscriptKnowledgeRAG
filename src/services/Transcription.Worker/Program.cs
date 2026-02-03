@@ -26,6 +26,7 @@ builder.Services.AddDbContext<TranscriptionDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 builder.Services.AddScoped<TranscriptionRepository>();
+builder.Services.AddScoped<IMediaStatusUpdater, MediaStatusUpdater>();
 
 // Messaging - RabbitMQ
 builder.Services.AddOptions<RabbitMqOptions>()

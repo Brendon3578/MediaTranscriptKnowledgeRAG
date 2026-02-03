@@ -1,6 +1,7 @@
 using FFMpegCore;
 using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Configuration;
+using MediaTranscription.Worker.Domain;
 using MediaTranscription.Worker.Infrastructure.Interfaces;
 using MediaTranscription.Worker.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
@@ -124,9 +125,23 @@ public class TranscriptionWorker : BackgroundService
 
         await using var scope = _scopeFactory.CreateAsyncScope();
         var transcriptionDataService = scope.ServiceProvider.GetRequiredService<TranscriptionRepository>();
+        var statusUpdater = scope.ServiceProvider.GetRequiredService<IMediaStatusUpdater>();
 
         try
         {
+            // 0. Update status to Processing
+            var updated = await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Processing, MediaStatus.Uploaded, ct);
+            if (!updated)
+            {
+                 // Retry scenario: If it failed before, it might be in Failed state.
+                 updated = await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Processing, MediaStatus.Failed, ct);
+                 if (!updated)
+                 {
+                     _logger.LogWarning("Media {MediaId} could not be transitioned to Processing. It might be in an unexpected state. Skipping.", mediaEvent.MediaId);
+                     return;
+                 }
+            }
+
             var startTime = DateTime.UtcNow;
 
             // 0. Extrair e persistir metadados (FFprobe)
@@ -171,6 +186,16 @@ public class TranscriptionWorker : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro no fluxo de transcrição da MediaId: {MediaId}", mediaEvent.MediaId);
+            
+            try 
+            {
+                await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Failed, MediaStatus.Processing, ct);
+            }
+            catch (Exception updateEx)
+            {
+                 _logger.LogError(updateEx, "Failed to update status to Failed for MediaId: {MediaId}", mediaEvent.MediaId);
+            }
+
             throw; // Repassa erro para lógica de retry (Nack)
         }
     }

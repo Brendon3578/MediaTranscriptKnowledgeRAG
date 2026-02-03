@@ -10,10 +10,18 @@ namespace MediaEmbedding.Worker.Infrastructure.Persistence
 
         public DbSet<EmbeddingEntity> Embeddings => Set<EmbeddingEntity>();
         public DbSet<TranscriptionSegment> TranscriptionSegments => Set<TranscriptionSegment>();
+        public DbSet<MediaEntity> Media => Set<MediaEntity>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.HasPostgresExtension("vector");
+
+            modelBuilder.Entity<MediaEntity>(e =>
+            {
+                e.ToTable("media");
+                e.HasKey(e => e.Id);
+                e.Property(e => e.Status).HasConversion<int>();
+            });
 
             modelBuilder.Entity<EmbeddingEntity>(e =>
             {
