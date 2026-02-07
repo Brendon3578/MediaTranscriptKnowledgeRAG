@@ -110,7 +110,8 @@ namespace Upload.Api.Application
                  FileName = media.FileName,
                  Status = media.Status.ToString(),
                  UploadedAt = media.CreatedAt,
-                 UpdatedAt = media.UpdatedAt
+                 UpdatedAt = media.UpdatedAt,
+                 Model = media.Transcriptions.FirstOrDefault()?.ModelName,
              };
         }
 
@@ -167,6 +168,26 @@ namespace Upload.Api.Application
                 Total = total,
                 Items = items
             };
+        }
+
+        public async Task<TranscribedMediaDto?> GetTranscribedMediaByIdAsync(Guid id, CancellationToken ct)
+        {
+            var media = await _context.Media
+                .AsNoTracking()
+                .Where(m => m.Id == id && m.Transcriptions.Any())
+                .Select(m => new TranscribedMediaDto
+                {
+                    MediaId = m.Id,
+                    FileName = m.FileName,
+                    MediaType = m.ContentType,
+                    Duration = m.DurationSeconds != null ? (int)m.DurationSeconds : 0,
+                    Status = m.Status.ToString(),
+                    TranscriptionText = m.Transcriptions.FirstOrDefault()!.Text,
+                    CreatedAt = m.CreatedAt
+                })
+                .FirstOrDefaultAsync(ct);
+
+            return media;
         }
     }
 }

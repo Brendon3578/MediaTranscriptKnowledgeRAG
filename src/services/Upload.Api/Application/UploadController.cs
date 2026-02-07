@@ -111,5 +111,23 @@ namespace Upload.Api.Application
                 return StatusCode(500, new { error = "Erro ao listar mídias transcritas" });
             }
         }
+
+        [HttpGet("transcribed/{id}")]
+        public async Task<IActionResult> GetTranscribedMediaById(Guid id, CancellationToken ct)
+        {
+            try
+            {
+                var result = await _uploadService.GetTranscribedMediaByIdAsync(id, ct);
+                if (result == null)
+                    return NotFound(new { error = "Media não encontrada ou sem transcrição" });
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao buscar mídia transcrita por ID");
+                return StatusCode(500, new { error = "Erro ao buscar mídia transcrita" });
+            }
+        }
     }
 }
