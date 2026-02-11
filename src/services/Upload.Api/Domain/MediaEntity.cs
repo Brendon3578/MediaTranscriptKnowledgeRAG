@@ -46,6 +46,6 @@ namespace Upload.Api.Domain
         [Column("updated_at")]
         public DateTime? UpdatedAt { get; set; }
 
-        public virtual ICollection<TranscriptionEntity> Transcriptions { get; set; } = new List<TranscriptionEntity>();
+        public virtual TranscriptionEntity? Transcription { get; set; }
     }
 }

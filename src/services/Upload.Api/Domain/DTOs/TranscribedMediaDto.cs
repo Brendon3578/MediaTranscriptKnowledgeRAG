@@ -8,6 +8,7 @@ namespace Upload.Api.Domain.DTOs
         public int Duration { get; set; }
         public string Status { get; set; } = string.Empty;
         public string TranscriptionText { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
     }
 }

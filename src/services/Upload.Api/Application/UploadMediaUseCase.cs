@@ -111,7 +111,7 @@ namespace Upload.Api.Application
                  Status = media.Status.ToString(),
                  UploadedAt = media.CreatedAt,
                  UpdatedAt = media.UpdatedAt,
-                 Model = media.Transcriptions.FirstOrDefault()?.ModelName,
+                 Model = media.Transcription?.ModelName,
              };
         }
 
@@ -141,7 +141,7 @@ namespace Upload.Api.Application
 
             var query = _context.Media
                 .AsNoTracking()
-                .Where(m => m.Transcriptions.Any());
+                .Where(m => m.Transcription != null);
 
             var total = await query.CountAsync(ct);
 
@@ -156,7 +156,8 @@ namespace Upload.Api.Application
                     MediaType = m.ContentType,
                     Duration = m.DurationSeconds != null ? (int) m.DurationSeconds : 0,
                     Status = m.Status.ToString(),
-                    TranscriptionText = m.Transcriptions.FirstOrDefault()!.Text,
+                    TranscriptionText = m.Transcription!.Text,
+                    Model = m.Transcription!.ModelName ?? "",
                     CreatedAt = m.CreatedAt
                 })
                 .ToListAsync(ct);
@@ -174,7 +175,7 @@ namespace Upload.Api.Application
         {
             var media = await _context.Media
                 .AsNoTracking()
-                .Where(m => m.Id == id && m.Transcriptions.Any())
+                .Where(m => m.Id == id && m.Transcription != null)
                 .Select(m => new TranscribedMediaDto
                 {
                     MediaId = m.Id,
@@ -182,7 +183,8 @@ namespace Upload.Api.Application
                     MediaType = m.ContentType,
                     Duration = m.DurationSeconds != null ? (int)m.DurationSeconds : 0,
                     Status = m.Status.ToString(),
-                    TranscriptionText = m.Transcriptions.FirstOrDefault()!.Text,
+                    TranscriptionText = m.Transcription!.Text,
+                    Model = m.Transcription!.ModelName ?? "",
                     CreatedAt = m.CreatedAt
                 })
                 .FirstOrDefaultAsync(ct);

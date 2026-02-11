@@ -164,8 +164,8 @@ public class TranscriptionWorker : BackgroundService
             _logger.LogInformation("Transcrição concluída para MediaId: {MediaId}. Segmentos: {Count}", mediaEvent.MediaId, result.Segments.Count);
 
 
-            // Idempotência: remove segmentos existentes dessa mídia
-            await transcriptionDataService.RemoveExistingTranscriptionSegmentsByMediaId(mediaEvent.MediaId, ct);
+            // Idempotência: remove transcrição existente dessa mídia (e segmentos por cascade)
+            await transcriptionDataService.RemoveExistingTranscriptionByMediaId(mediaEvent.MediaId, ct);
 
             var transcriptionId = await transcriptionDataService.SaveTranscriptionAndSegments(result, mediaEvent, ct);
 

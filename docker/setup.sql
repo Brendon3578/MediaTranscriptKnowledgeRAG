@@ -34,7 +34,9 @@ CREATE TABLE transcriptions (
     CONSTRAINT fk_transcription_media
         FOREIGN KEY (media_id)
         REFERENCES media(id)
-        ON DELETE CASCADE
+        ON DELETE CASCADE,
+
+    CONSTRAINT uq_transcriptions_media_id UNIQUE (media_id)
 );
 
 -- =========================

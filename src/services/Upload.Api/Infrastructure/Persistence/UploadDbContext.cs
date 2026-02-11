@@ -37,9 +37,9 @@ namespace Upload.Api.Infrastructure.Persistence
                 e.HasIndex(e => e.CreatedAt);
                 e.HasIndex(e => e.Status);
 
-                e.HasMany(m => m.Transcriptions)
+                e.HasOne(m => m.Transcription)
                     .WithOne(t => t.Media)
-                    .HasForeignKey(t => t.MediaId)
+                    .HasForeignKey<TranscriptionEntity>(t => t.MediaId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 

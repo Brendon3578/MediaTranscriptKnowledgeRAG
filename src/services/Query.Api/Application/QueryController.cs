@@ -21,7 +21,7 @@ namespace Query.Api.Application
                 return BadRequest("A pergunta não pode estar vazia.");
             }
 
-            if (request.Filters == null || request.Filters.MediaIds == null)
+            if (request.Filters == null || request.Filters.MediaIds == null || request.Filters.MediaIds.Count == 0)
             {
                 return BadRequest("Selecione uma mídia para consultar.");
             }

@@ -72,7 +72,7 @@ namespace Upload.Api.Application
         }
 
         [HttpGet("{id}/status")]
-        public async Task<IActionResult> GetStatus(Guid id, CancellationToken ct)
+        public async Task<ActionResult<MediaUploadDto>> GetStatus(Guid id, CancellationToken ct)
         {
             var uploadMediaDto = await _uploadService.GetStatus(id, ct);
 
@@ -83,7 +83,7 @@ namespace Upload.Api.Application
         }
 
         [HttpGet("GetAllMedia")]
-        public async Task<IActionResult> GetAllMedia(CancellationToken ct)
+        public async Task<ActionResult<IReadOnlyList<MediaListItemDto>>> GetAllMedia(CancellationToken ct)
         {
             try
             {

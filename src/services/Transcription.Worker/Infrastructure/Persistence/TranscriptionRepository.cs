@@ -1,6 +1,7 @@
 using MediaTranscription.Worker.Application.Interfaces;
 using MediaTranscription.Worker.Domain;
 using Shared.Contracts.Events;
+using Microsoft.EntityFrameworkCore;
 
 namespace MediaTranscription.Worker.Infrastructure.Persistence
 {
@@ -13,14 +14,16 @@ namespace MediaTranscription.Worker.Infrastructure.Persistence
             _db = context;
         }
 
-        public async Task RemoveExistingTranscriptionSegmentsByMediaId(Guid mediaId, CancellationToken cancellationToken)
+        public async Task RemoveExistingTranscriptionByMediaId(Guid mediaId, CancellationToken cancellationToken)
         {
-            var existingSegments = _db.TranscriptionSegments
-                .Where(s => s.MediaId == mediaId);
+            var existingTranscription = await _db.Transcriptions
+                .FirstOrDefaultAsync(t => t.MediaId == mediaId, cancellationToken);
 
-            _db.TranscriptionSegments.RemoveRange(existingSegments);
-
-            await _db.SaveChangesAsync(cancellationToken);
+            if (existingTranscription != null)
+            {
+                _db.Transcriptions.Remove(existingTranscription);
+                await _db.SaveChangesAsync(cancellationToken);
+            }
         }
 
         public async Task UpdateMediaMetadataAsync(Guid mediaId, double? durationSeconds, string? audioCodec, int? sampleRate, CancellationToken cancellationToken)
