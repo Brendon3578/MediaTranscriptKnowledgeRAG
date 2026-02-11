@@ -21,9 +21,9 @@ namespace Query.Api.Application
                 return BadRequest("A pergunta não pode estar vazia.");
             }
 
-            if (request.Filters == null || request.Filters.MediaIds == null || request.Filters.MediaIds.Count == 0)
+            if (request.TimeRanges == null || request.TimeRanges.Count == 0)
             {
-                return BadRequest("Selecione uma mídia para consultar.");
+                return BadRequest("É necessário especificar intervalos de tempo para a consulta.");
             }
 
             try

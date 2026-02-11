@@ -67,6 +67,7 @@ CREATE TABLE transcription_segments (
 CREATE INDEX idx_segments_media_id ON transcription_segments(media_id);
 CREATE INDEX idx_segments_transcription_id ON transcription_segments(transcription_id);
 CREATE INDEX idx_segments_media_index ON transcription_segments(media_id, segment_index);
+CREATE INDEX IF NOT EXISTS idx_segments_media_time ON transcription_segments (media_id, start_seconds, end_seconds);
 
 -- =========================
 -- tabela embeddings
@@ -101,9 +102,11 @@ CREATE UNIQUE INDEX uq_embedding_segment_model
 ON embeddings (transcription_segment_id, model_name);
 
 -- =========================
--- Índice vetorial (RAG)
+-- Indexes (Search & RAG)
 -- =========================
-CREATE INDEX embeddings_embedding_idx
+CREATE INDEX IF NOT EXISTS idx_embeddings_model ON embeddings (model_name);
+
+CREATE INDEX IF NOT EXISTS embeddings_embedding_idx
 ON embeddings
 USING ivfflat (embedding vector_cosine_ops)
 WITH (lists = 100);

@@ -28,8 +28,16 @@ namespace Query.Api.Application
             var queryVector = await _embeddingService.GenerateQueryEmbeddingAsync(request.Question);
 
             // 2. Buscar segmentos relevantes
-            var modelName = _configuration["Embedding:Model"] ?? "nomic-embed-text";
-            var sources = await _vectorRepo.SearchAsync(queryVector, modelName, request.Filters, request.TopK);
+            var modelName = !string.IsNullOrWhiteSpace(request.ModelName) 
+                ? request.ModelName 
+                : _configuration["Embedding:Model"] ?? "nomic-embed-text";
+
+            var sources = await _vectorRepo.SearchAsync(
+                queryVector, 
+                modelName, 
+                request.TimeRanges ?? new List<MediaTimeRange>(), 
+                request.TopK,
+                request.MaxDistance);
 
             if (!sources.Any())
             {
