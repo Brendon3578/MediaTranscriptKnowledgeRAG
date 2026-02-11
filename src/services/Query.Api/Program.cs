@@ -3,12 +3,22 @@ using Query.Api.Application;
 using Query.Api.Infrastructure;
 using Query.Api.Infrastructure.Persistence;
 
+using Npgsql;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
 
-// CORS (se necessário) -> TODO: Mudar em uso em produção
+// Database Configuration
+var connectionString = builder.Configuration.GetConnectionString("Postgres") 
+    ?? throw new InvalidOperationException("Connection string 'Postgres' not found.");
+
+var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+dataSourceBuilder.UseVector();
+builder.Services.AddSingleton(dataSourceBuilder.Build());
+
+// CORS (se necessï¿½rio) -> TODO: Mudar em uso em produï¿½ï¿½o
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>

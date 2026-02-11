@@ -36,8 +36,8 @@ namespace Query.Api.Application
                 queryVector, 
                 modelName, 
                 request.TimeRanges ?? new List<MediaTimeRange>(), 
-                request.TopK,
-                request.MaxDistance);
+                request.MaxDistance,
+                request.TopK);
 
             if (!sources.Any())
             {
@@ -54,7 +54,7 @@ namespace Query.Api.Application
             return new QueryResponse
             {
                 Answer = answer,
-                Sources = sources
+                Sources = sources.ToList()
             };
         }
     }

@@ -13,7 +13,7 @@ namespace Query.Api.Application
             _chatClient = chatClient;
         }
 
-        public async Task<string> GenerateAnswerAsync(string question, List<ResultSource> sources)
+        public async Task<string> GenerateAnswerAsync(string question, IReadOnlyList<ResultSource> sources)
         {
             var contextBuilder = new StringBuilder();
 
