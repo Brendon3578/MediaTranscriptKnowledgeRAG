@@ -44,8 +44,17 @@ namespace MediaEmbedding.Worker
 
             try
             {
-                // Ensure status is Processing (recover from Failed if retrying)
-                await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.Processing, MediaStatus.Failed, ct);
+                // Ensure status is EmbeddingProcessing (from TranscriptionCompleted or recover from Failed if retrying)
+                var updated = await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.EmbeddingProcessing, MediaStatus.TranscriptionCompleted, ct);
+                if (!updated)
+                {
+                    updated = await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.EmbeddingProcessing, MediaStatus.Failed, ct);
+                    if (!updated)
+                    {
+                        _logger.LogWarning("Media {MediaId} could not be transitioned to EmbeddingProcessing. It might be in an unexpected state. Skipping.", @event.MediaId);
+                        return;
+                    }
+                }
 
                 // 1. Busca segmentos
                 var segments = await _embeddingDataService.FindTranscriptionSegmentsByMediaIdAsync(@event.MediaId);
@@ -106,14 +115,14 @@ namespace MediaEmbedding.Worker
                 _logger.LogInformation("Processamento concluído para MediaId: {MediaId}. Gerados: {Processed}, Pulados: {Skipped}",
                     @event.MediaId, processedCount, skippedCount);
 
-                await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.Completed, MediaStatus.Processing, ct);
+                await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.Completed, MediaStatus.EmbeddingProcessing, ct);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao processar embeddings para MediaId: {MediaId}", @event.MediaId);
                 try
                 {
-                    await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.Failed, MediaStatus.Processing, ct);
+                    await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.Failed, MediaStatus.EmbeddingProcessing, ct);
                 }
                 catch (Exception updateEx)
                 {

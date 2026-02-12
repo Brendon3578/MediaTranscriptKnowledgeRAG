@@ -14,6 +14,10 @@ CREATE TABLE media (
     duration_seconds REAL,
     audio_codec VARCHAR(50),
     sample_rate INT,
+    transcription_progress_percent REAL,
+    embedding_progress_percent REAL,
+    total_duration_seconds REAL,
+    processed_seconds REAL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );

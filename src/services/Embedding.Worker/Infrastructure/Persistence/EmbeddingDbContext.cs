@@ -21,6 +21,11 @@ namespace MediaEmbedding.Worker.Infrastructure.Persistence
                 e.ToTable("media");
                 e.HasKey(e => e.Id);
                 e.Property(e => e.Status).HasConversion<int>();
+                
+                e.Property(e => e.TranscriptionProgressPercent);
+                e.Property(e => e.EmbeddingProgressPercent);
+                e.Property(e => e.TotalDurationSeconds);
+                e.Property(e => e.ProcessedSeconds);
             });
 
             modelBuilder.Entity<EmbeddingEntity>(e =>

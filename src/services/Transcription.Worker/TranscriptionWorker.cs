@@ -129,15 +129,15 @@ public class TranscriptionWorker : BackgroundService
 
         try
         {
-            // 0. Update status to Processing
-            var updated = await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Processing, MediaStatus.Uploaded, ct);
+            // 0. Update status to TranscriptionProcessing
+            var updated = await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.TranscriptionProcessing, MediaStatus.Uploaded, ct);
             if (!updated)
             {
                  // Retry scenario: If it failed before, it might be in Failed state.
-                 updated = await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Processing, MediaStatus.Failed, ct);
+                 updated = await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.TranscriptionProcessing, MediaStatus.Failed, ct);
                  if (!updated)
                  {
-                     _logger.LogWarning("Media {MediaId} could not be transitioned to Processing. It might be in an unexpected state. Skipping.", mediaEvent.MediaId);
+                     _logger.LogWarning("Media {MediaId} could not be transitioned to TranscriptionProcessing. It might be in an unexpected state. Skipping.", mediaEvent.MediaId);
                      return;
                  }
             }
@@ -169,7 +169,10 @@ public class TranscriptionWorker : BackgroundService
 
             var transcriptionId = await transcriptionDataService.SaveTranscriptionAndSegments(result, mediaEvent, ct);
 
-            // 2. Publicar evento de conclusão
+            // 2. Update status to TranscriptionCompleted
+            await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.TranscriptionCompleted, MediaStatus.TranscriptionProcessing, ct);
+
+            // 3. Publicar evento de conclusão
             var transcribedEvent = new MediaTranscribedEvent
             {
                 MediaId = mediaEvent.MediaId,
@@ -189,7 +192,7 @@ public class TranscriptionWorker : BackgroundService
             
             try 
             {
-                await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Failed, MediaStatus.Processing, ct);
+                await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Failed, MediaStatus.TranscriptionProcessing, ct);
             }
             catch (Exception updateEx)
             {

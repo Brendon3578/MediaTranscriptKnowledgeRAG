@@ -5,9 +5,11 @@ namespace Upload.Api.Domain
     public enum MediaStatus
     {
         Uploaded = 0,
-        Processing = 1,
-        Completed = 2,
-        Failed = 3
+        TranscriptionProcessing = 1,
+        TranscriptionCompleted = 2,
+        EmbeddingProcessing = 3,
+        Completed = 4,
+        Failed = 5
     }
 
     public class MediaEntity
@@ -39,6 +41,18 @@ namespace Upload.Api.Domain
 
         [Column("sample_rate")]
         public int? SampleRate { get; set; }
+
+        [Column("transcription_progress_percent")]
+        public float? TranscriptionProgressPercent { get; set; }
+
+        [Column("embedding_progress_percent")]
+        public float? EmbeddingProgressPercent { get; set; }
+
+        [Column("total_duration_seconds")]
+        public float? TotalDurationSeconds { get; set; }
+
+        [Column("processed_seconds")]
+        public float? ProcessedSeconds { get; set; }
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

@@ -34,6 +34,11 @@ namespace Upload.Api.Infrastructure.Persistence
                 e.Property(e => e.AudioCodec);
                 e.Property(e => e.SampleRate);
 
+                e.Property(e => e.TranscriptionProgressPercent);
+                e.Property(e => e.EmbeddingProgressPercent);
+                e.Property(e => e.TotalDurationSeconds);
+                e.Property(e => e.ProcessedSeconds);
+
                 e.HasIndex(e => e.CreatedAt);
                 e.HasIndex(e => e.Status);
 
