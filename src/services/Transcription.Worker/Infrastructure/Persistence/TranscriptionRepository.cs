@@ -32,12 +32,24 @@ namespace MediaTranscription.Worker.Infrastructure.Persistence
             if (media != null)
             {
                 media.DurationSeconds = (float?)durationSeconds;
+                media.TotalDurationSeconds = (float?)durationSeconds;
                 media.AudioCodec = audioCodec;
                 media.SampleRate = sampleRate;
                 media.UpdatedAt = DateTime.UtcNow;
 
                 await _db.SaveChangesAsync(cancellationToken);
             }
+        }
+
+        public async Task<MediaEntity?> GetMediaByIdAsync(Guid mediaId, CancellationToken cancellationToken)
+        {
+            return await _db.Media.FindAsync(new object[] { mediaId }, cancellationToken);
+        }
+
+        public async Task UpdateMediaAsync(MediaEntity media, CancellationToken cancellationToken)
+        {
+            media.UpdatedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(cancellationToken);
         }
 
         public async Task<Guid> SaveTranscriptionAndSegments(TranscriptionResultDto resultDto, MediaUploadedEvent mediaEvent, CancellationToken cancellationToken)

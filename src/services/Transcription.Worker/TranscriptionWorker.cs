@@ -124,40 +124,51 @@ public class TranscriptionWorker : BackgroundService
             mediaEvent.FileSizeBytes);
 
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var transcriptionDataService = scope.ServiceProvider.GetRequiredService<TranscriptionRepository>();
+        var transcriptionRepository = scope.ServiceProvider.GetRequiredService<TranscriptionRepository>();
         var statusUpdater = scope.ServiceProvider.GetRequiredService<IMediaStatusUpdater>();
 
         try
         {
-            // 0. Update status to TranscriptionProcessing
-            var updated = await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.TranscriptionProcessing, MediaStatus.Uploaded, ct);
-            if (!updated)
+            // 1. Extrair metadados (FFprobe)
+            var metadata = await _metadataExtractor.ExtractMetadataAsync(mediaEvent.FilePath, ct);
+            if (metadata == null)
             {
-                 // Retry scenario: If it failed before, it might be in Failed state.
-                 updated = await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.TranscriptionProcessing, MediaStatus.Failed, ct);
-                 if (!updated)
-                 {
-                     _logger.LogWarning("Media {MediaId} could not be transitioned to TranscriptionProcessing. It might be in an unexpected state. Skipping.", mediaEvent.MediaId);
-                     return;
-                 }
+                _logger.LogError("Falha ao extrair metadados para MediaId: {MediaId}. Abortando.", mediaEvent.MediaId);
+                await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Failed, MediaStatus.Uploaded, ct);
+                return;
+            }
+
+            // 2. Carregar MediaEntity e inicializar estado
+            var media = await transcriptionRepository.GetMediaByIdAsync(mediaEvent.MediaId, ct);
+            if (media == null)
+            {
+                _logger.LogWarning("MediaEntity não encontrada para MediaId: {MediaId}. Abortando.", mediaEvent.MediaId);
+                return;
+            }
+
+            // Idempotência: evitar redefinir se já estiver em processamento ou além (exceto se falhou antes)
+            if (media.Status >= MediaStatus.TranscriptionProcessing && media.Status != MediaStatus.Failed)
+            {
+                _logger.LogInformation("Media {MediaId} já está em processamento ou concluída (Status: {Status}). Pulando inicialização.", mediaEvent.MediaId, media.Status);
+            }
+            else
+            {
+                // Inicializar progresso e status
+                media.Status = MediaStatus.TranscriptionProcessing;
+                media.TotalDurationSeconds = (float)metadata.DurationSeconds;
+                media.DurationSeconds = (float)metadata.DurationSeconds;
+                media.ProcessedSeconds = 0;
+                media.TranscriptionProgressPercent = 0;
+                media.AudioCodec = metadata.AudioCodec;
+                media.SampleRate = metadata.SampleRate;
+
+                await transcriptionRepository.UpdateMediaAsync(media, ct);
+                _logger.LogInformation("Estado da MediaId {MediaId} inicializado: TranscriptionProcessing, Duração: {Duration}s", mediaEvent.MediaId, metadata.DurationSeconds);
             }
 
             var startTime = DateTime.UtcNow;
 
-            // 0. Extrair e persistir metadados (FFprobe)
-            var metadata = await _metadataExtractor.ExtractMetadataAsync(mediaEvent.FilePath, ct);
-            if (metadata != null)
-            {
-                await transcriptionDataService.UpdateMediaMetadataAsync(
-                    mediaEvent.MediaId,
-                    metadata.DurationSeconds,
-                    metadata.AudioCodec,
-                    metadata.SampleRate,
-                    ct);
-                _logger.LogInformation("Metadata persisted for MediaId: {MediaId}. Duration: {Duration}s", mediaEvent.MediaId, metadata.DurationSeconds);
-            }
-
-            // 1. Transcrever usando o Facade (Passando o modelo do evento)
+            // 3. Transcrever usando o Facade
             var result = await _transcriptionFacade.TranscribeAsync(mediaEvent.FilePath, mediaEvent.ContentType, mediaEvent.TranscriptionModel, ct);
 
             var duration = DateTime.UtcNow - startTime;
@@ -165,14 +176,14 @@ public class TranscriptionWorker : BackgroundService
 
 
             // Idempotência: remove transcrição existente dessa mídia (e segmentos por cascade)
-            await transcriptionDataService.RemoveExistingTranscriptionByMediaId(mediaEvent.MediaId, ct);
+            await transcriptionRepository.RemoveExistingTranscriptionByMediaId(mediaEvent.MediaId, ct);
 
-            var transcriptionId = await transcriptionDataService.SaveTranscriptionAndSegments(result, mediaEvent, ct);
+            var transcriptionId = await transcriptionRepository.SaveTranscriptionAndSegments(result, mediaEvent, ct);
 
-            // 2. Update status to TranscriptionCompleted
+            // 4. Update status to TranscriptionCompleted
             await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.TranscriptionCompleted, MediaStatus.TranscriptionProcessing, ct);
 
-            // 3. Publicar evento de conclusão
+            // 5. Publicar evento de conclusão
             var transcribedEvent = new MediaTranscribedEvent
             {
                 MediaId = mediaEvent.MediaId,
