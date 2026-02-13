@@ -168,27 +168,50 @@ public class TranscriptionWorker : BackgroundService
 
             var startTime = DateTime.UtcNow;
 
-            // 3. Transcrever usando o Facade
-            var result = await _transcriptionFacade.TranscribeAsync(mediaEvent.FilePath, mediaEvent.ContentType, mediaEvent.TranscriptionModel, ct);
-
-            var duration = DateTime.UtcNow - startTime;
-            _logger.LogInformation("Transcrição concluída para MediaId: {MediaId}. Segmentos: {Count}", mediaEvent.MediaId, result.Segments.Count);
-
-
             // Idempotência: remove transcrição existente dessa mídia (e segmentos por cascade)
+            // Agora feito ANTES de começar a transcrição incremental
             await transcriptionRepository.RemoveExistingTranscriptionByMediaId(mediaEvent.MediaId, ct);
 
-            var transcriptionId = await transcriptionRepository.SaveTranscriptionAndSegments(result, mediaEvent, ct);
+            // Criar registro inicial de transcrição
+            var transcriptionId = await transcriptionRepository.CreateInitialTranscriptionAsync(
+                mediaEvent.MediaId, 
+                mediaEvent.TranscriptionModel ?? "Medium", 
+                ct);
 
-            // 4. Update status to TranscriptionCompleted
-            await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.TranscriptionCompleted, MediaStatus.TranscriptionProcessing, ct);
+            // 3. Transcrever usando o Facade com callback incremental
+            var result = await _transcriptionFacade.TranscribeAsync(
+                mediaEvent.FilePath, 
+                mediaEvent.ContentType, 
+                mediaEvent.TranscriptionModel,
+                async (segment) => 
+                {
+                    // Callback chamado para cada segmento produzido
+                    await transcriptionRepository.AddTranscriptionSegmentAsync(transcriptionId, mediaEvent.MediaId, segment, ct);
+                    _logger.LogDebug("Segmento {Index} persistido para MediaId: {MediaId}. Progresso: {Progress}%", 
+                        segment.SegmentIndex, mediaEvent.MediaId, (segment.EndSeconds / (media.TotalDurationSeconds ?? 1)) * 100);
+                },
+                ct);
+
+            var duration = DateTime.UtcNow - startTime;
+            _logger.LogInformation("Transcrição concluída para MediaId: {MediaId}. Segmentos: {Count}", mediaEvent.MediaId, result.SegmentCount);
+
+            // 4. Finalizar transcrição (Update status, final text, language, progress 100%)
+            await transcriptionRepository.FinalizeTranscriptionAsync(
+                transcriptionId,
+                mediaEvent.MediaId,
+                result.TranscriptionText,
+                result.Language,
+                duration.TotalSeconds,
+                ct);
+
+            _logger.LogInformation("Estado final da MediaId {MediaId} persistido: TranscriptionCompleted", mediaEvent.MediaId);
 
             // 5. Publicar evento de conclusão
             var transcribedEvent = new MediaTranscribedEvent
             {
                 MediaId = mediaEvent.MediaId,
                 TranscriptionId = transcriptionId,
-                TotalSegments = result.Segments.Count,
+                TotalSegments = result.SegmentCount,
                 Language = result.Language,
                 ProcessingDuration = duration,
                 TranscribedAt = DateTime.UtcNow
@@ -203,6 +226,7 @@ public class TranscriptionWorker : BackgroundService
             
             try 
             {
+                // Em caso de falha, marcar como Failed
                 await statusUpdater.UpdateStatusAsync(mediaEvent.MediaId, MediaStatus.Failed, MediaStatus.TranscriptionProcessing, ct);
             }
             catch (Exception updateEx)
