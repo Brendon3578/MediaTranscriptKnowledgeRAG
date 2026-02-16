@@ -53,5 +53,42 @@ namespace MediaEmbedding.Worker.Infrastructure.Persistence
                 throw;
             }
         }
+
+        public async Task UpdateProgressAsync(Guid mediaId, float progress, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _context.Media
+                    .Where(m => m.Id == mediaId)
+                    .ExecuteUpdateAsync(calls => calls
+                        .SetProperty(m => m.EmbeddingProgressPercent, progress)
+                        .SetProperty(m => m.UpdatedAt, DateTime.UtcNow),
+                        cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating progress for Media {MediaId}", mediaId);
+            }
+        }
+
+        public async Task UpdateFinalStateAsync(Guid mediaId, MediaStatus finalStatus, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                await _context.Media
+                    .Where(m => m.Id == mediaId)
+                    .ExecuteUpdateAsync(calls => calls
+                        .SetProperty(m => m.Status, finalStatus)
+                        .SetProperty(m => m.EmbeddingProgressPercent, finalStatus == MediaStatus.Completed ? 100f : null)
+                        .SetProperty(m => m.UpdatedAt, DateTime.UtcNow),
+                        cancellationToken);
+
+                _logger.LogInformation("Media {MediaId} finalized with status {Status}.", mediaId, finalStatus);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error finalizing state for Media {MediaId}", mediaId);
+            }
+        }
     }
 }

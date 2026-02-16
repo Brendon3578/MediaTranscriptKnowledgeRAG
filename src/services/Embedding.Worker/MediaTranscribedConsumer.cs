@@ -47,7 +47,7 @@ namespace MediaEmbedding.Worker
                 // Ensure status is EmbeddingProcessing (from TranscriptionCompleted or recover from Failed if retrying)
                 var updated = await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.EmbeddingProcessing, MediaStatus.TranscriptionCompleted, ct);
                 if (!updated)
-                {
+                { 
                     updated = await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.EmbeddingProcessing, MediaStatus.Failed, ct);
                     if (!updated)
                     {
@@ -56,18 +56,23 @@ namespace MediaEmbedding.Worker
                     }
                 }
 
+                // Initialize progress
+                await _statusUpdater.UpdateProgressAsync(@event.MediaId, 0, ct);
+
                 // 1. Busca segmentos
                 var segments = await _embeddingDataService.FindTranscriptionSegmentsByMediaIdAsync(@event.MediaId);
 
                 if (segments.Count == 0)
                 {
                     _logger.LogWarning("Nenhum segmento encontrado para MediaId: {MediaId}", @event.MediaId);
+                    await _statusUpdater.UpdateFinalStateAsync(@event.MediaId, MediaStatus.Completed, ct);
                     return;
                 }
 
                 _logger.LogInformation("Encontrados {Count} segmentos para processar.", segments.Count);
 
-                int processedCount = 0;
+                int totalSegments = segments.Count;
+                int processedSegments = 0;
                 int skippedCount = 0;
 
                 foreach (var segment in segments)
@@ -78,6 +83,7 @@ namespace MediaEmbedding.Worker
                     if (exists)
                     {
                         skippedCount++;
+                        processedSegments++; // Consider skipped as processed for progress calculation
                         continue;
                     }
 
@@ -86,7 +92,7 @@ namespace MediaEmbedding.Worker
 
                     // 4. Salva no banco
                     var embedding = new EmbeddingEntity
-                    {
+                    { 
                         Id = Guid.NewGuid(),
                         MediaId = segment.MediaId,
                         TranscriptionId = segment.TranscriptionId,
@@ -98,37 +104,26 @@ namespace MediaEmbedding.Worker
                     };
 
                     await _embeddingDataService.SaveEmbeddingAsync(embedding);
-                    processedCount++;
+                    await _embeddingDataService.SaveEmbeddingsAsync(); // Persist each one for progress reliability
+
+                    processedSegments++;
+                    float progress = ((float)processedSegments / totalSegments) * 100;
+                    await _statusUpdater.UpdateProgressAsync(@event.MediaId, progress, ct);
                 }
 
-                if (processedCount > 0)
-                {
-                    await _embeddingDataService.SaveEmbeddingsAsync();
+                _logger.LogInformation("Processamento concluído para MediaId: {MediaId}. Processados: {Processed}, Pulados: {Skipped}", 
+                    @event.MediaId, totalSegments - skippedCount, skippedCount);
 
-                    await PublishMediaEmbeddedEventAsync(@event.MediaId, _modelName, segments.Count, ct);
+                // Finalize state
+                await _statusUpdater.UpdateFinalStateAsync(@event.MediaId, MediaStatus.Completed, ct);
 
-                    _logger.LogInformation(
-                        "MediaEmbedded publicado - MediaId: {MediaId}, Chunks: {ChunksCount}, Model: {ModelName}",
-                        @event.MediaId, segments.Count, _modelName);
-                }
-
-                _logger.LogInformation("Processamento concluído para MediaId: {MediaId}. Gerados: {Processed}, Pulados: {Skipped}",
-                    @event.MediaId, processedCount, skippedCount);
-
-                await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.Completed, MediaStatus.EmbeddingProcessing, ct);
+                // Publish event
+                await PublishMediaEmbeddedEventAsync(@event.MediaId, _modelName, totalSegments, ct);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Erro ao processar embeddings para MediaId: {MediaId}", @event.MediaId);
-                try
-                {
-                    await _statusUpdater.UpdateStatusAsync(@event.MediaId, MediaStatus.Failed, MediaStatus.EmbeddingProcessing, ct);
-                }
-                catch (Exception updateEx)
-                {
-                    _logger.LogError(updateEx, "Failed to update status to Failed for MediaId: {MediaId}", @event.MediaId);
-                }
-                throw; // Re-throw para o RabbitMQ fazer Nack/Retry
+                await _statusUpdater.UpdateFinalStateAsync(@event.MediaId, MediaStatus.Failed, ct);
             }
         }
 

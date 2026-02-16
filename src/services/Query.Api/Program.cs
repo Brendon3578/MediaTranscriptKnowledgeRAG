@@ -4,6 +4,7 @@ using Query.Api.Infrastructure;
 using Query.Api.Infrastructure.Persistence;
 
 using Npgsql;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,6 +18,10 @@ var connectionString = builder.Configuration.GetConnectionString("Postgres")
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 dataSourceBuilder.UseVector();
 builder.Services.AddSingleton(dataSourceBuilder.Build());
+
+// Database
+builder.Services.AddDbContext<QueryDbContext>(options =>
+    options.UseNpgsql(connectionString, o => o.UseVector()));
 
 // CORS (se necess�rio) -> TODO: Mudar em uso em produ��o
 builder.Services.AddCors(options =>
@@ -56,6 +61,7 @@ builder.Services.AddChatClient(sp =>
 builder.Services.AddScoped<TranscriptionSegmentVectorSearchRepository>();
 builder.Services.AddScoped<EmbeddingGeneratorService>();
 builder.Services.AddScoped<GenerateAnswerUseCase>();
+builder.Services.AddScoped<GetMediaStatusUseCase>();
 builder.Services.AddScoped<RagFacade>();
 builder.Services.AddHttpClient<IOllamaHealthCheckService, OllamaHealthCheckService>();
 
