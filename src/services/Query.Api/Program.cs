@@ -61,7 +61,6 @@ builder.Services.AddChatClient(sp =>
 builder.Services.AddScoped<TranscriptionSegmentVectorSearchRepository>();
 builder.Services.AddScoped<EmbeddingGeneratorService>();
 builder.Services.AddScoped<GenerateAnswerUseCase>();
-builder.Services.AddScoped<GetMediaStatusUseCase>();
 builder.Services.AddScoped<RagFacade>();
 builder.Services.AddHttpClient<IOllamaHealthCheckService, OllamaHealthCheckService>();
 

@@ -45,11 +45,4 @@ namespace Query.Api.Application
         public double Distance { get; set; }
     }
 
-    public class MediaStatusResponse
-    {
-        public Guid MediaId { get; set; }
-        public string Status { get; set; } = string.Empty;
-        public float TranscriptionProgress { get; set; }
-        public float EmbeddingProgress { get; set; }
-    }
 }

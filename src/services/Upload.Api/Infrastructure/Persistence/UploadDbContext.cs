@@ -10,6 +10,8 @@ namespace Upload.Api.Infrastructure.Persistence
 
         public DbSet<MediaEntity> Media => Set<MediaEntity>();
         public DbSet<TranscriptionEntity> Transcriptions => Set<TranscriptionEntity>();
+        public DbSet<TranscriptionSegmentEntity> TranscriptionSegments => Set<TranscriptionSegmentEntity>();
+        public DbSet<EmbeddingEntity> Embeddings => Set<EmbeddingEntity>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -54,6 +56,27 @@ namespace Upload.Api.Infrastructure.Persistence
                 e.HasKey(e => e.Id);
                 
                 e.Property(e => e.Text).IsRequired();
+            });
+
+            modelBuilder.Entity<TranscriptionSegmentEntity>(e =>
+            {
+                e.ToTable("transcription_segments");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Text).IsRequired();
+                e.Property(x => x.StartSeconds).HasColumnType("real");
+                e.Property(x => x.EndSeconds).HasColumnType("real");
+                e.Property(x => x.Confidence).HasColumnType("real");
+                e.Property(x => x.CreatedAt);
+                e.HasIndex(x => x.MediaId);
+                e.HasIndex(x => x.TranscriptionId);
+                e.HasIndex(x => new { x.MediaId, x.SegmentIndex });
+            });
+
+            modelBuilder.Entity<EmbeddingEntity>(e =>
+            {
+                e.ToTable("embeddings");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.MediaId).IsRequired();
             });
         }
     }

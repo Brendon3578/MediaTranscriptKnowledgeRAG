@@ -39,6 +39,7 @@ builder.Services.AddHostedService<RabbitMqHostedService>();
 
 // Services do Controller
 builder.Services.AddScoped<IUploadService, UploadMediaUseCase>();
+builder.Services.AddScoped<GetMediaStatusUseCase>();
 
 // CORS (se necessário) -> TODO: Mudar em uso em produção
 builder.Services.AddCors(options =>

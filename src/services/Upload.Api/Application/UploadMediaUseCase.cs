@@ -191,5 +191,91 @@ namespace Upload.Api.Application
 
             return media;
         }
+
+        public async Task<MediaDeletionSummaryDto?> DeleteMediaAsync(Guid id, CancellationToken ct)
+        {
+            _logger.LogInformation("Iniciando exclusão de mídia {MediaId}", id);
+
+            var media = await _context.Media
+                .AsNoTracking()
+                .FirstOrDefaultAsync(m => m.Id == id, ct);
+
+            if (media == null)
+            {
+                _logger.LogWarning("Mídia não encontrada para exclusão {MediaId}", id);
+                return null;
+            }
+
+            var filePath = media.FilePath;
+
+            int embeddingsDeleted = 0;
+            int segmentsDeleted = 0;
+            int transcriptionsDeleted = 0;
+            int mediaDeleted = 0;
+
+
+            await using var transaction = await _context.Database.BeginTransactionAsync(ct);
+
+            try
+            {
+                embeddingsDeleted = await _context.Embeddings
+                    .Where(e => e.MediaId == id)
+                    .ExecuteDeleteAsync(ct);
+
+                segmentsDeleted = await _context.TranscriptionSegments
+                    .Where(s => s.MediaId == id)
+                    .ExecuteDeleteAsync(ct);
+
+                transcriptionsDeleted = await _context.Transcriptions
+                    .Where(t => t.MediaId == id)
+                    .ExecuteDeleteAsync(ct);
+
+                mediaDeleted = await _context.Media
+                    .Where(m => m.Id == id)
+                    .ExecuteDeleteAsync(ct);
+
+                _logger.LogInformation(
+                    "Exclusão em cascata concluída para mídia {MediaId}: {EmbeddingsDeleted} embeddings, {SegmentsDeleted} segmentos, {TranscriptionsDeleted} transcrições, {MediaDeleted} registros de mídia",
+                    id,
+                    embeddingsDeleted,
+                    segmentsDeleted,
+                    transcriptionsDeleted,
+                    mediaDeleted);
+
+                await transaction.CommitAsync(ct);
+
+                _logger.LogInformation("Transação de exclusão confirmada para mídia {MediaId}", id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao executar transação de exclusão para mídia {MediaId}", id);
+                await transaction.RollbackAsync(ct);
+                throw;
+            }
+
+            var fileDeleted = false;
+
+            try
+            {
+                fileDeleted = await _fileStorage.DeleteFileAsync(filePath, ct);
+                _logger.LogInformation(
+                    "Resultado da exclusão do arquivo físico para mídia {MediaId}: FileDeleted={FileDeleted}",
+                    id,
+                    fileDeleted);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao excluir arquivo físico para mídia {MediaId}", id);
+            }
+
+            return new MediaDeletionSummaryDto
+            {
+                MediaId = id,
+                EmbeddingsDeleted = embeddingsDeleted,
+                SegmentsDeleted = segmentsDeleted,
+                TranscriptionsDeleted = transcriptionsDeleted,
+                FileDeleted = fileDeleted
+            };
+        }
     }
 }

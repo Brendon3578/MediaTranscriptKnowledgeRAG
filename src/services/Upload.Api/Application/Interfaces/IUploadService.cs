@@ -10,5 +10,6 @@ namespace Upload.Api.Application.Interfaces
         Task<IReadOnlyList<MediaListItemDto>> GetAllMediaAsync(CancellationToken ct);
         Task<PagedResponseDto<TranscribedMediaDto>> GetTranscribedMediaAsync(int page, int pageSize, CancellationToken ct);
         Task<TranscribedMediaDto?> GetTranscribedMediaByIdAsync(Guid id, CancellationToken ct);
+        Task<MediaDeletionSummaryDto?> DeleteMediaAsync(Guid id, CancellationToken ct);
     }
 }
