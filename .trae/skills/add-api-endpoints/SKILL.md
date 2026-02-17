@@ -67,14 +67,14 @@ Controller must:
 
 - Inject the service via constructor
 - Validate input before calling the service
-- Return `IActionResult` (Ok, NotFound, BadRequest, Accepted, StatusCode)
+- Return `ActionResult` with the created DTO (Ok, NotFound, BadRequest, Accepted, StatusCode)
 - Use `ErrorResponseRequest` for 4xx when appropriate
 - Catch exceptions and return 500 with generic error (do not expose stack traces)
 - Pass `CancellationToken` to async calls
 
 ```csharp
 [HttpGet("{id}/your-action")]
-public async Task<IActionResult> YourAction(Guid id, CancellationToken ct)
+public async Task<ActionResult<YourResponseDto>> YourAction(Guid id, CancellationToken ct)
 {
     var result = await _uploadService.YourMethodAsync(id, ct);
     if (result == null)

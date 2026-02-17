@@ -113,7 +113,7 @@ namespace Upload.Api.Application
         }
 
         [HttpGet("transcribed/{id}")]
-        public async Task<IActionResult> GetTranscribedMediaById(Guid id, CancellationToken ct)
+        public async Task<ActionResult<TranscribedMediaDto>> GetTranscribedMediaById(Guid id, CancellationToken ct)
         {
             try
             {
