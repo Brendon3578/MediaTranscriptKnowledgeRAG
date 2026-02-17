@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Upload.Api.Application.Interfaces;
 using Upload.Api.Domain.DTOs;
 using Upload.Api.Domain.Enum;
+using Shared.Exceptions;
 
 namespace Upload.Api.Application
 {
@@ -34,41 +35,30 @@ namespace Upload.Api.Application
         [RequestSizeLimit(MaxRequestSizeLimitInBytes)]
         public async Task<IActionResult> Upload(IFormFile file, [FromQuery] string? model, CancellationToken ct)
         {
-            try
+            if (file == null || file.Length == 0)
+                throw new ValidationException("Arquivo não enviado");
+
+            if (!AllowedContentTypes.Contains(file.ContentType))
+                throw new ValidationException($"Tipo de arquivo não suportado: {file.ContentType}");
+
+            var isEnumParsed = Enum.TryParse<WhisperModelTypesEnum.GgmlType>(model, true, out var parsedModel);
+
+            if (isEnumParsed == false && string.IsNullOrEmpty(model))
             {
-                if (file == null || file.Length == 0)
-                    return BadRequest(new ErrorResponseRequest("Arquivo não enviado"));
-
-                if (!AllowedContentTypes.Contains(file.ContentType))
-                    return BadRequest(new ErrorResponseRequest($"Tipo de arquivo não suportado: {file.ContentType}"));
-
-                var isEnumParsed = Enum.TryParse<WhisperModelTypesEnum.GgmlType>(model, true, out var parsedModel);
-
-                if (isEnumParsed == false && string.IsNullOrEmpty(model))
-                {
-                    parsedModel = WhisperModelTypesEnum.GgmlType.Medium; // Valor padrão
-                }
-                else if (isEnumParsed == false)
-                {
-                    return BadRequest("Modelo do whisper não encontrado");
-                }
-
-
-                var uploadMediaDto = await _uploadService.UploadFileAsync(file, parsedModel.ToString(), ct);
-
-                // Retorna 202 Accepted
-                return AcceptedAtAction(
-                    nameof(GetStatus),
-                    new { id = uploadMediaDto.MediaId },
-                    uploadMediaDto
-                );
-
+                parsedModel = WhisperModelTypesEnum.GgmlType.Medium;
             }
-            catch (Exception ex)
+            else if (isEnumParsed == false)
             {
-                _logger.LogError(ex, "Erro ao processar upload");
-                return StatusCode(500, new { error = "Erro ao processar upload" });
+                throw new NotFoundException("Modelo do whisper não encontrado");
             }
+
+            var uploadMediaDto = await _uploadService.UploadFileAsync(file, parsedModel.ToString(), ct);
+
+            return AcceptedAtAction(
+                nameof(GetStatus),
+                new { id = uploadMediaDto.MediaId },
+                uploadMediaDto
+            );
         }
 
         [HttpGet("{id}/status")]
@@ -77,7 +67,7 @@ namespace Upload.Api.Application
             var uploadMediaDto = await _uploadService.GetStatus(id, ct);
 
             if (uploadMediaDto == null)
-                return NotFound(new { error = "Media não encontrada" });
+                throw new NotFoundException("Media não encontrada");
 
             return Ok(uploadMediaDto);
         }
@@ -85,49 +75,25 @@ namespace Upload.Api.Application
         [HttpGet("GetAllMedia")]
         public async Task<ActionResult<IReadOnlyList<MediaListItemDto>>> GetAllMedia(CancellationToken ct)
         {
-            try
-            {
-                var list = await _uploadService.GetAllMediaAsync(ct);
-                return Ok(list);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao listar mídias");
-                return StatusCode(500, new { error = "Erro ao listar mídias" });
-            }
+            var list = await _uploadService.GetAllMediaAsync(ct);
+            return Ok(list);
         }
 
         [HttpGet("transcribed")]
         public async Task<ActionResult<PagedResponseDto<TranscribedMediaDto>>> GetTranscribedMedia([FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default)
         {
-            try
-            {
-                var result = await _uploadService.GetTranscribedMediaAsync(page, pageSize, ct);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao listar mídias transcritas");
-                return StatusCode(500, new { error = "Erro ao listar mídias transcritas" });
-            }
+            var result = await _uploadService.GetTranscribedMediaAsync(page, pageSize, ct);
+            return Ok(result);
         }
 
         [HttpGet("transcribed/{id}")]
         public async Task<ActionResult<TranscribedMediaDto>> GetTranscribedMediaById(Guid id, CancellationToken ct)
         {
-            try
-            {
-                var result = await _uploadService.GetTranscribedMediaByIdAsync(id, ct);
-                if (result == null)
-                    return NotFound(new { error = "Media não encontrada ou sem transcrição" });
+            var result = await _uploadService.GetTranscribedMediaByIdAsync(id, ct);
+            if (result == null)
+                throw new NotFoundException("Media não encontrada ou sem transcrição");
 
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Erro ao buscar mídia transcrita por ID");
-                return StatusCode(500, new { error = "Erro ao buscar mídia transcrita" });
-            }
+            return Ok(result);
         }
     }
 }

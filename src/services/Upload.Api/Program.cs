@@ -5,6 +5,7 @@ using Upload.Api.Configuration;
 using Upload.Api.Infrastructure.FileSystem;
 using Upload.Api.Infrastructure.Messaging;
 using Upload.Api.Infrastructure.Persistence;
+using Upload.Api.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -68,6 +69,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 app.UseCors("AllowAll");
 app.UseAuthorization();

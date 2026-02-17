@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Shared.Exceptions;
 
 namespace Query.Api.Application
 {
@@ -18,24 +19,16 @@ namespace Query.Api.Application
         {
             if (string.IsNullOrWhiteSpace(request.Question))
             {
-                return BadRequest("A pergunta não pode estar vazia.");
+                throw new ValidationException("A pergunta não pode estar vazia.");
             }
 
             if (request.TimeRanges == null || request.TimeRanges.Count == 0)
             {
-                return BadRequest("É necessário especificar intervalos de tempo para a consulta.");
+                throw new ValidationException("É necessário especificar intervalos de tempo para a consulta.");
             }
 
-            try
-            {
-                var response = await _ragFacade.ProcessQueryAsync(request);
-                return Ok(response);
-            }
-            catch (Exception ex)
-            {
-                // Em produção, logar o erro e não expor detalhes
-                return StatusCode(500, $"Erro interno ao processar a query: {ex.Message}");
-            }
+            var response = await _ragFacade.ProcessQueryAsync(request);
+            return Ok(response);
         }
     }
 }
