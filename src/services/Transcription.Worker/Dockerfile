@@ -2,6 +2,14 @@
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/runtime:10.0 AS base
+
+# Install FFmpeg and FFprobe
+USER root
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends ffmpeg && \
+  apt-get clean && \
+  rm -rf /var/lib/apt/lists/*
+
 USER $APP_UID
 WORKDIR /app
 

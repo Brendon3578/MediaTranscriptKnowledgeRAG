@@ -18,17 +18,7 @@ namespace MediaTranscription.Worker.Infrastructure
             _logger = logger;
             _configuration = configuration;
             
-            // Opcional: Configurar caminho do binário se não estiver no PATH
-            var executablePath = _configuration["FFmpeg:ExecutablePath"] ?? "ffmpeg";
-            
-            if (!string.IsNullOrEmpty(executablePath) && Path.IsPathRooted(executablePath))
-            {
-                var ffmpegDir = Path.GetDirectoryName(executablePath);
-                if (string.IsNullOrEmpty(ffmpegDir))
-                    throw new InvalidOperationException("FFMpeg directory not defined.");
-
-                GlobalFFOptions.Configure(new FFOptions { BinaryFolder = ffmpegDir });
-            }
+            // FFMpegCore busca automaticamente no PATH se GlobalFFOptions.Configure não for chamado.
         }
 
         public async Task<string> ExtractAudioAsync(string videoPath, CancellationToken cancellationToken)
