@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Upload.Api.Application;
-using Upload.Api.Application.Interfaces;
+using Shared.Application.Interfaces;
+using Shared.Infrastructure.Storage;
 using Upload.Api.Configuration;
 using Upload.Api.Infrastructure.FileSystem;
 using Upload.Api.Infrastructure.Messaging;
 using Upload.Api.Infrastructure.Persistence;
 using Upload.Api.Infrastructure;
+using Upload.Api.Application.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,7 +23,16 @@ builder.Services.AddDbContext<UploadDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 // File Storage
-builder.Services.AddSingleton<IFileStorageFacade, LocalFileStorage>();
+var provider = builder.Configuration["Storage:Provider"];
+
+if (provider == "Minio")
+{
+    builder.Services.AddSingleton<IFileStorageFacade, MinioFileStorage>();
+}
+else
+{
+    builder.Services.AddSingleton<IFileStorageFacade, LocalFileStorage>();
+}
 
 // Messaging - RabbitMQ
 // Options removed - using IConfiguration directly in services
@@ -72,10 +83,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
+//app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 app.UseAuthorization();
 app.MapControllers();
 
-app.UseHttpsRedirection();
-
-app.Run();
+await app.RunAsync();

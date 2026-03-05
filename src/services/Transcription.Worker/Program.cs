@@ -7,6 +7,8 @@ using MediaTranscription.Worker.Infrastructure.Interfaces;
 using MediaTranscription.Worker.Infrastructure.Messaging;
 using MediaTranscription.Worker.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Shared.Application.Interfaces;
+using Shared.Infrastructure.Storage;
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -15,6 +17,7 @@ builder.Services.AddSingleton<IMediaMetadataExtractor, MediaMetadataExtractor>()
 builder.Services.AddSingleton<IWhisperModelProvider, WhisperAIModelProvider>();
 builder.Services.AddSingleton<IDependencyBootstrapper, WhisperAndFfmpegBootstrapper>();
 builder.Services.AddSingleton<ITranscriptionFacade, WhisperNetTranscriptionFacade>();
+builder.Services.AddSingleton<IFileStorageFacade, MinioFileStorage>();
 
 builder.Services.AddSingleton<RabbitMqEventPublisher>();
 builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<RabbitMqEventPublisher>());

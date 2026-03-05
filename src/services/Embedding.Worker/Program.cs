@@ -21,7 +21,7 @@ builder.Services.AddSingleton<IEventPublisher>(sp => sp.GetRequiredService<Rabbi
 builder.Services.AddHostedService<RabbitMqPublisherHostedService>();
 
 // Database
-var connectionString = builder.Configuration.GetConnectionString("Postgres");
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<EmbeddingDbContext>(options =>
 {
     options.UseNpgsql(connectionString, o => o.UseVector());

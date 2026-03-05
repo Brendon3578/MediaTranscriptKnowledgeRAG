@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Shared.Contracts.Events;
-using Upload.Api.Application.Interfaces;
+using Shared.Application.Interfaces;
 using Upload.Api.Domain;
 using Upload.Api.Domain.DTOs;
 using Upload.Api.Infrastructure.Persistence;
+using Upload.Api.Application.Interfaces;
 
 namespace Upload.Api.Application
 {

@@ -31,11 +31,12 @@ O pipeline de processamento segue as seguintes etapas:
 * **Mensageria**: [RabbitMQ](https://www.rabbitmq.com/) (Event-Driven Architecture)
 * **Banco de Dados**: [PostgreSQL](https://www.postgresql.org/)
 * **Busca Vetorial**: [pgvector](https://github.com/pgvector/pgvector)
+* **Armazenamento de Mídia**: [MinIO](https://min.io/) (S3-compatible para ambiente local)
 * **ORM / Data Access**: Entity Framework Core & [Dapper](https://github.com/DapperLib/Dapper)
 * **Biblioteca de IA & LLM**: [Microsoft.Extensions.AI](https://devblogs.microsoft.com/dotnet/introducing-microsoft-extensions-ai-preview/)
 * **Modelos Locais**: [Ollama](https://ollama.com/) (phi3:mini, bge-M3)
 * **Transcrição**: [Whisper.net](https://github.com/sandrohanea/whisper.net)
-* **Processamento de Mídia**: [FFmpeg](https://ffmpeg.org/)
+* **Processamento de Mídia**: [FFmpeg](https://ffmpeg.org/) (Containerizado)
 * **Infraestrutura**: Docker & Docker Compose
 
 ## Modelo de Dados (Visão Geral)
@@ -60,30 +61,109 @@ A funcionalidade de busca (Retrieval-Augmented Generation) é o coração do sis
 
 O sistema segue uma arquitetura distribuída onde cada etapa do pipeline é desacoplada e reage a eventos de domínio. Isso permite escalabilidade independente (ex: aumentar workers de transcrição sem afetar a API de upload) e resiliência.
 
+### Infraestrutura Local (Docker Compose)
+
+Para simular um ambiente de produção robusto e isolado, toda a infraestrutura de backend é gerenciada via Docker Compose. Isso inclui:
+
+* **RabbitMQ:** Broker de mensageria para a comunicação assíncrona.
+* **PostgreSQL + pgvector:** Banco de dados para persistência de metadados e vetores.
+* **MinIO:** Serviço de armazenamento de objetos compatível com a API S3.
+
+#### Armazenamento de S3 simulado com MinIO
+
+Foi utilizado o **MinIO** para ser o armazenamento de arquivos de vídeos/áudios, substituindo o storage diretamente no disco local. Essa abordagem traz vantagens significativas para o ambiente de desenvolvimento e testes:
+
+* **Simulação de Ambiente Cloud:** Emula o comportamento de serviços como o AWS S3, preparando a aplicação para uma migração transparente para a nuvem.
+* **Isolamento:** Os arquivos de mídia são armazenados em um *bucket* dedicado (`media-files`), evitando a dispersão de arquivos no sistema de arquivos do host.
+* **Integração:** A `Upload.Api` é configurada para se conectar ao endpoint do MinIO, fazendo o upload dos arquivos de forma segura. O `Transcription.Worker` também acessa os arquivos a partir do MinIO para processamento.
+* **Portabilidade:** O estado da aplicação (banco de dados e arquivos) fica contido nos volumes do Docker, facilitando a replicação do ambiente em diferentes máquinas.
+
+> **Nota:** O MinIO é utilizado estritamente para o ambiente local. Em produção, as configurações podem ser facilmente ajustadas para apontar para um serviço S3 gerenciado (AWS, Google Cloud Storage, etc.).
+
 ### Fluxo de Dados
 
-#### Diagrama de Arquitetura Geral (Microserviços)
+#### Diagrama de Arquitetura Geral (Componentes)
 
 ```mermaid
-flowchart LR
-    User --> UploadApi[Upload.Api]
+flowchart TB
 
-    UploadApi -->|media.uploaded| RabbitMQ[(RabbitMQ)]
+    %% =========================
+    %% CLIENT
+    %% =========================
+    subgraph CLIENT["Client"]
+        User["👤 User"]
+    end
 
-    RabbitMQ --> TranscriptionWorker[Transcription.Worker]
-    TranscriptionWorker -->|media.transcribed| RabbitMQ
+    %% =========================
+    %% CAMADA SÍNCRONA
+    %% =========================
+    subgraph APIS["APIs (Síncronas)"]
+        UploadApi["Upload.Api"]
+        QueryApi["Query.Api"]
+    end
 
-    RabbitMQ --> EmbeddingWorker[Embedding.Worker]
-    EmbeddingWorker -->|media.embedded| RabbitMQ
+    %% =========================
+    %% PIPELINE ASSÍNCRONO
+    %% =========================
+    subgraph PIPELINE["Pipeline Assíncrono (Event-Driven)"]
 
-    User --> QueryApi[Query.Api]
+        direction TB
 
-    UploadApi --> Postgres[(PostgreSQL + pgvector)]
-    TranscriptionWorker --> Postgres
-    EmbeddingWorker --> Postgres
-    QueryApi --> Postgres
+        RabbitMQ[("RabbitMQ")]
 
-    QueryApi --> Ollama[(Ollama\nLLM + Embeddings)]
+        subgraph TRANSCRIPTION["Etapa 1 - Transcrição"]
+            TranscriptionWorker["Transcription.Worker"]
+        end
+
+        subgraph EMBEDDING["Etapa 2 - Embeddings"]
+            EmbeddingWorker["Embedding.Worker"]
+        end
+
+    end
+
+    %% =========================
+    %% INFRA
+    %% =========================
+    subgraph INFRA["Infraestrutura"]
+        MinIO[("MinIO S3 Storage")]
+        Postgres[("PostgreSQL + pgvector")]
+        Ollama[("Ollama LLM + Embeddings")]
+    end
+
+    %% =========================
+    %% FLUXO CLIENTE
+    %% =========================
+    User -->|"1️⃣ Upload (HTTP)"| UploadApi
+    User -->|"2️⃣ Acompanha Status (SSE)"| UploadApi
+    User -->|"8️⃣ Pergunta (HTTP)"| QueryApi
+
+    %% =========================
+    %% UPLOAD
+    %% =========================
+    UploadApi -->|"3️⃣ Salva mídia"| MinIO
+    UploadApi -->|"4️⃣ MediaUploadedEvent"| RabbitMQ
+
+    %% =========================
+    %% TRANSCRIÇÃO
+    %% =========================
+    RabbitMQ -->|"5️⃣ Consome evento"| TranscriptionWorker
+    TranscriptionWorker -->|"Lê mídia"| MinIO
+    TranscriptionWorker -->|"FFmpeg + Whisper"| TranscriptionWorker
+    TranscriptionWorker -->|"Salva transcrição"| Postgres
+    TranscriptionWorker -->|"6️⃣ MediaTranscribedEvent"| RabbitMQ
+
+    %% =========================
+    %% EMBEDDINGS
+    %% =========================
+    RabbitMQ -->|"7️⃣ Consome evento"| EmbeddingWorker
+    EmbeddingWorker -->|"Gera embeddings"| Ollama
+    EmbeddingWorker -->|"Salva vetores"| Postgres
+
+    %% =========================
+    %% RAG
+    %% =========================
+    QueryApi -->|"Busca vetorial (<=>)"| Postgres
+    QueryApi -->|"Geração RAG"| Ollama
 ```
 
 #### Pipeline da arquitetura orientada a eventos (Event-Driven)
@@ -92,24 +172,29 @@ flowchart LR
 sequenceDiagram
     participant U as User
     participant UA as Upload.Api
+    participant S3 as MinIO/S3
     participant MQ as RabbitMQ
     participant TW as Transcription.Worker
     participant EW as Embedding.Worker
     participant DB as PostgreSQL
 
-    U ->> UA: Upload vídeo/áudio
-    UA ->> DB: Salva media
-    UA ->> MQ: MediaUploadedEvent
+    U ->> UA: 1. Upload de mídia (vídeo/áudio)
+    UA ->> S3: 2. Armazena arquivo
+    UA ->> DB: 3. Salva metadados da mídia
+    UA ->> MQ: 4. Publica MediaUploadedEvent
+    UA -->> U: 5. Retorna ID e endpoint SSE
 
-    MQ ->> TW: MediaUploadedEvent
-    TW ->> TW: Extrai áudio (FFmpeg)
-    TW ->> TW: Transcreve (Whisper)
-    TW ->> DB: Salva transcrição + segmentos
-    TW ->> MQ: MediaTranscribedEvent
+    U ->> UA: 6. Conecta ao endpoint SSE
 
-    MQ ->> EW: MediaTranscribedEvent
-    EW ->> EW: Gera embeddings (Ollama)
-    EW ->> DB: Salva embeddings (pgvector)
+    MQ ->> TW: 7. Consome MediaUploadedEvent
+    TW ->> S3: 8. Baixa mídia para processar
+    TW ->> TW: 9. Extrai áudio (FFmpeg) e Transcreve (Whisper)
+    TW ->> DB: 10. Salva transcrição e segmentos
+    TW ->> MQ: 11. Publica MediaTranscribedEvent
+
+    MQ ->> EW: 12. Consome MediaTranscribedEvent
+    EW ->> EW: 13. Gera embeddings (Ollama)
+    EW ->> DB: 14. Salva embeddings (pgvector)
 ```
 
 #### Modelo de Dados (Visão Conceitual)
@@ -151,44 +236,76 @@ erDiagram
 
 ```
 
+### 🔄 Acompanhamento em Tempo Real com Server-Sent Events (SSE)
+
+Para oferecer uma experiência de usuário mais interativa e transparente, o sistema implementa **Server-Sent Events (SSE)** para o acompanhamento em tempo real do status do processamento de mídia. Após o upload, o cliente pode se conectar a um endpoint SSE na `Upload.Api` para receber atualizações progressivas.
+
+#### Fluxo de Status
+
+O servidor envia eventos de status à medida que o processamento avança no pipeline assíncrono:
+
+1. **`media-uploaded`**: Confirma que o arquivo foi recebido e o processo iniciado.
+2. **`transcription-started`**: Indica que o `Transcription.Worker` começou a processar o áudio.
+3. **`transcription-completed`**: A transcrição foi finalizada e os segmentos foram salvos.
+4. **`embedding-started`**: O `Embedding.Worker` iniciou a geração dos vetores.
+5. **`embedding-completed`**: O processo foi finalizado com sucesso e a mídia está pronta para ser consultada.
+
+#### Por que SSE?
+
+A escolha pelo SSE em vez de WebSockets ou polling tradicional foi estratégica:
+
+* **Simplicidade:** SSE é um padrão web nativo, unidirecional (servidor -> cliente), que pode ser consumido facilmente no front-end com a interface `EventSource`.
+* **Eficiência:** Mantém uma conexão HTTP persistente, eliminando a sobrecarga de múltiplas requisições de polling e o overhead de um handshake de WebSocket.
+* **Leveza:** É ideal para enviar pequenas e infrequentes atualizações de texto, como é o caso dos status de processamento.
+
+Essa abordagem melhora a experiência do usuário, fornecendo feedback imediato sobre um processo de longa duração.
+
+### Containerização e Ambiente de Execução
+
+Todas as aplicações do sistema (`Upload.Api`, `Transcription.Worker`, `Embedding.Worker`, `Query.Api`) são totalmente containerizadas, cada uma com seu próprio `Dockerfile`. Essa abordagem garante um ambiente de desenvolvimento e produção consistente e isolado.
+
+#### FFmpeg no `Transcription.Worker`
+
+Uma decisão arquitetural importante foi a instalação do **FFmpeg** diretamente dentro da imagem Docker do `Transcription.Worker`. Isso oferece benefícios cruciais:
+
+* **Reprodutibilidade:** O ambiente de execução é idêntico em qualquer máquina que execute o Docker, eliminando problemas de "funciona na minha máquina".
+* **Independência do Host:** O worker não depende de nenhuma biblioteca ou CLI pré-instalada no sistema operacional do host, simplificando o setup.
+* **Isolamento de Dependências:** A versão do FFmpeg é controlada e testada junto com a aplicação, evitando conflitos de versão.
+
+O build de cada serviço é feito individualmente, permitindo atualizações e deploys granulares.
+
 ## 🛠 Como Executar o Projeto
+
+O projeto é configurado para ser executado 100% via Docker, simplificando o setup e garantindo consistência.
 
 ### Pré-requisitos
 
 * Docker e Docker Compose instalados.
-* .NET 10 SDK (para desenvolvimento/build local).
-* Ollama rodando localmente (ou configurável via Docker) com os modelos necessários (ex: `llama3`, `nomic-embed-text`).
+* Ollama rodando localmente com os modelos necessários (ex: `phi3:mini`, `bge-m3`).
 
 ### Passo a Passo
 
 1. **Clone o repositório**
 
     ```bash
-    git clone https://github.com/seu-usuario/MediaTranscriptKnowledgeRAG.git
+    git clone https://github.com/brendon3578/MediaTranscriptKnowledgeRAG.git
     cd MediaTranscriptKnowledgeRAG
     ```
 
-2. **Suba a infraestrutura (RabbitMQ + Postgres)**
+2. **Suba todo o ambiente com Docker Compose**
+
+    O comando a seguir irá construir as imagens de cada serviço e iniciar todos os contêineres da infraestrutura e da aplicação (APIs e Workers).
 
     ```bash
-    docker-compose up -d
+    docker-compose up --build
     ```
 
-3. **Execute as aplicações**
-    Você pode rodar via Docker ou diretamente pelo .NET CLI:
+3. **Acesse o Swagger para interagir com as APIs**
 
-    ```bash
-    # Exemplo rodando a API de Upload
-    dotnet run --project src/services/Upload.Api
-    ```
+    * **Upload API:** `http://localhost:5000/swagger`
+    * **Query API:** `http://localhost:5002/swagger`
 
-4. **Acesse o Swagger**
-    * Upload API: `https://localhost:7290/swagger`
-    * Query API: `https://localhost:7032/swagger`
-
----
-
-> **Nota:** Na primeira execução, o `Transcription.Worker` pode levar alguns instantes para baixar o modelo Whisper selecionado (se ainda não estiver em cache).
+> **Nota:** Na primeira execução, o `Transcription.Worker` pode levar alguns instantes para baixar o modelo Whisper, e o `docker-compose up` pode demorar um pouco mais para construir todas as imagens. As execuções subsequentes serão mais rápidas.
 
 ## 📈 Status e Evolução
 
