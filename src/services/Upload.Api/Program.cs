@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Upload.Api.Application;
-using Upload.Api.Application.Interfaces;
+using Shared.Application.Interfaces;
+using Shared.Infrastructure.Storage;
 using Upload.Api.Configuration;
 using Upload.Api.Infrastructure.FileSystem;
 using Upload.Api.Infrastructure.Messaging;
 using Upload.Api.Infrastructure.Persistence;
 using Upload.Api.Infrastructure;
+using Upload.Api.Application.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -7,6 +7,7 @@ using MediaTranscription.Worker.Infrastructure.Persistence;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using Shared.Application.Interfaces;
 using Shared.Contracts.Events;
 using System.Text;
 using System.Text.Json;
@@ -19,6 +20,7 @@ public class TranscriptionWorker : BackgroundService
     private readonly ITranscriptionFacade _transcriptionFacade;
     private readonly IMediaMetadataExtractor _metadataExtractor;
     private readonly IEventPublisher _eventPublisher;
+    private readonly IFileStorageFacade _fileStorage;
     private readonly RabbitMqOptions _rabbitMqOptions;
     private readonly IServiceScopeFactory _scopeFactory;
     private IConnection? _connection;
@@ -30,6 +32,7 @@ public class TranscriptionWorker : BackgroundService
         ITranscriptionFacade transcriptionFacade,
         IMediaMetadataExtractor metadataExtractor,
         IEventPublisher eventPublisher,
+        IFileStorageFacade fileStorage,
         IServiceScopeFactory scopeFactory,
         IOptions<RabbitMqOptions> rabbitMqOptions)
     {
@@ -37,6 +40,7 @@ public class TranscriptionWorker : BackgroundService
         _transcriptionFacade = transcriptionFacade;
         _metadataExtractor = metadataExtractor;
         _eventPublisher = eventPublisher;
+        _fileStorage = fileStorage;
         _scopeFactory = scopeFactory;
         _rabbitMqOptions = rabbitMqOptions.Value;
     }
@@ -127,10 +131,22 @@ public class TranscriptionWorker : BackgroundService
         var transcriptionRepository = scope.ServiceProvider.GetRequiredService<TranscriptionRepository>();
         var statusUpdater = scope.ServiceProvider.GetRequiredService<IMediaStatusUpdater>();
 
+        string? tempVideoPath = null;
         try
         {
-            // 1. Extrair metadados (FFprobe)
-            var metadata = await _metadataExtractor.ExtractMetadataAsync(mediaEvent.FilePath, ct);
+            // 1. Download do arquivo do MinIO para processamento local
+            _logger.LogInformation("Baixando arquivo do MinIO: {ObjectKey}", mediaEvent.FilePath);
+            var extension = Path.GetExtension(mediaEvent.FileName);
+            tempVideoPath = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}{extension}");
+
+            using (var stream = await _fileStorage.GetFileAsync(mediaEvent.FilePath, ct))
+            using (var fileStream = new FileStream(tempVideoPath, FileMode.Create, FileAccess.Write))
+            {
+                await stream.CopyToAsync(fileStream, ct);
+            }
+
+            // 2. Extrair metadados (FFprobe)
+            var metadata = await _metadataExtractor.ExtractMetadataAsync(tempVideoPath, ct);
             if (metadata == null)
             {
                 _logger.LogError("Falha ao extrair metadados para MediaId: {MediaId}. Abortando.", mediaEvent.MediaId);
@@ -138,7 +154,7 @@ public class TranscriptionWorker : BackgroundService
                 return;
             }
 
-            // 2. Carregar MediaEntity e inicializar estado
+            // 3. Carregar MediaEntity e inicializar estado
             var media = await transcriptionRepository.GetMediaByIdAsync(mediaEvent.MediaId, ct);
             if (media == null)
             {
@@ -178,9 +194,9 @@ public class TranscriptionWorker : BackgroundService
                 mediaEvent.TranscriptionModel ?? "Medium", 
                 ct);
 
-            // 3. Transcrever usando o Facade com callback incremental
+            // 4. Transcrever usando o Facade com callback incremental
             var result = await _transcriptionFacade.TranscribeAsync(
-                mediaEvent.FilePath, 
+                tempVideoPath, 
                 mediaEvent.ContentType, 
                 mediaEvent.TranscriptionModel,
                 async (segment) => 
@@ -195,7 +211,7 @@ public class TranscriptionWorker : BackgroundService
             var duration = DateTime.UtcNow - startTime;
             _logger.LogInformation("Transcrição concluída para MediaId: {MediaId}. Segmentos: {Count}", mediaEvent.MediaId, result.SegmentCount);
 
-            // 4. Finalizar transcrição (Update status, final text, language, progress 100%)
+            // 5. Finalizar transcrição (Update status, final text, language, progress 100%)
             await transcriptionRepository.FinalizeTranscriptionAsync(
                 transcriptionId,
                 mediaEvent.MediaId,
@@ -206,7 +222,7 @@ public class TranscriptionWorker : BackgroundService
 
             _logger.LogInformation("Estado final da MediaId {MediaId} persistido: TranscriptionCompleted", mediaEvent.MediaId);
 
-            // 5. Publicar evento de conclusão
+            // 6. Publicar evento de conclusão
             var transcribedEvent = new MediaTranscribedEvent
             {
                 MediaId = mediaEvent.MediaId,
@@ -235,6 +251,22 @@ public class TranscriptionWorker : BackgroundService
             }
 
             throw; // Repassa erro para lógica de retry (Nack)
+        }
+        finally
+        {
+            // Limpeza de arquivos temporários
+            if (tempVideoPath != null && File.Exists(tempVideoPath))
+            {
+                try
+                {
+                    File.Delete(tempVideoPath);
+                    _logger.LogDebug("Arquivo temporário de vídeo removido: {TempPath}", tempVideoPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Falha ao remover arquivo temporário de vídeo: {TempPath}", tempVideoPath);
+                }
+            }
         }
     }
 

@@ -2,6 +2,7 @@ using FFMpegCore;
 using MediaTranscription.Worker.Infrastructure.Interfaces;
 using Microsoft.Extensions.Logging;
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;

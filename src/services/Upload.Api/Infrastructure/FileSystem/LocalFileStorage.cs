@@ -1,4 +1,4 @@
-﻿using Upload.Api.Application.Interfaces;
+﻿using Shared.Application.Interfaces;
 
 namespace Upload.Api.Infrastructure.FileSystem
 {
@@ -72,6 +72,14 @@ namespace Upload.Api.Infrastructure.FileSystem
             return Task.FromResult(File.Exists(filePath));
         }
 
-
+        public Task<Stream> GetFileAsync(string objectKey, CancellationToken ct = default)
+        {
+            var filePath = Path.Combine(_basePath, objectKey);
+            if (!File.Exists(filePath))
+            {
+                throw new FileNotFoundException("File not found", filePath);
+            }
+            return Task.FromResult<Stream>(new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read));
+        }
     }
 }
