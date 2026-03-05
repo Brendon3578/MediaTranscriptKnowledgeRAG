@@ -1,0 +1,17 @@
+{
+  "profiles": {
+    "Docker Compose": {
+      "commandName": "DockerCompose",
+      "commandVersion": "1.0",
+      "serviceActions": {
+        "upload.api": "StartDebugging",
+        "query.api": "StartDebugging",
+        "mediatranscription.worker": "StartDebugging",
+        "mediaembedding.worker": "StartDebugging",
+        "postgres_pgvector": "StartWithoutDebugging",
+        "rabbitmq": "StartWithoutDebugging",
+        "minio": "StartWithoutDebugging"
+      }
+    }
+  }
+}

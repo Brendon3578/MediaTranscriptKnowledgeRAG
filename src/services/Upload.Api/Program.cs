@@ -21,7 +21,16 @@ builder.Services.AddDbContext<UploadDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 // File Storage
-builder.Services.AddSingleton<IFileStorageFacade, LocalFileStorage>();
+var provider = builder.Configuration["Storage:Provider"];
+
+if (provider == "Minio")
+{
+    builder.Services.AddSingleton<IFileStorageFacade, MinioFileStorage>();
+}
+else
+{
+    builder.Services.AddSingleton<IFileStorageFacade, LocalFileStorage>();
+}
 
 // Messaging - RabbitMQ
 // Options removed - using IConfiguration directly in services
@@ -72,10 +81,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
+//app.UseHttpsRedirection();
 app.UseCors("AllowAll");
 app.UseAuthorization();
 app.MapControllers();
 
-app.UseHttpsRedirection();
-
-app.Run();
+await app.RunAsync();
