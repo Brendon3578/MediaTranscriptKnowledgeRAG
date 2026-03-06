@@ -50,6 +50,19 @@ services:
       - minio_data:/data
     restart: unless-stopped
 
+  minio-create-bucket:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c " sleep 5;
+      mc alias set myminio http://minio:9000 minio minio123;
+      mc ls myminio/media-files || mc mb myminio/media-files;
+      mc anonymous set download myminio/media-files;
+      exit 0;
+      "
+
+##"
 
   upload.api:
     image: ${DOCKER_REGISTRY-}uploadapi
@@ -70,9 +83,6 @@ services:
       - RabbitMq__HostName=rabbitmq
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
-
-    
-
 
   query.api:
     image: ${DOCKER_REGISTRY-}queryapi
